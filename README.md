@@ -1,16 +1,87 @@
-# React + Vite
+# DRIFTSPACE
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> Minimalist infinite space survival. No story. Pure skill.
 
-Currently, two official plugins are available:
+![DRIFTSPACE](public/logo.png)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+**[▶ PLAY NOW](https://drift-space.vercel.app/)**
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## About
 
-## Expanding the ESLint configuration
+DRIFTSPACE is a browser-based arcade survival game built with React and HTML5 Canvas. Dodge and destroy procedurally generated asteroids as difficulty scales over time. Survive as long as possible. Your score is your legacy.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+
+## Gameplay
+
+- Asteroids drift in from all directions
+- Speed and spawn rate increase every wave
+- Large asteroids split into two on first hit
+- 3 lives — lose them all and it's over
+- Score is based on asteroid size × kills
+
+---
+
+## Controls
+
+| Key | Action |
+|-----|--------|
+| `W A S D` | Navigate |
+| `SPACE` | Fire |
+| `P` | Pause |
+
+---
+
+## Tech Stack
+
+- **React** + **Vite**
+- **HTML5 Canvas** — game rendering
+- **LocalStorage** — persistent high scores
+- **Vercel** — deployment
+
+---
+
+## Project Structure
+src/
+game/
+constants.js       # Tunable game values
+Ship.js            # Ship physics + rendering
+Asteroid.js        # Asteroid spawning, splitting, rendering
+Bullet.js          # Bullet movement + rendering
+Particle.js        # Explosion + thrust particles
+useGameLoop.js     # Core game loop, collision detection
+components/
+GameCanvas.jsx     # Canvas mount + resize
+HUD.jsx            # Score, lives, wave display
+Menu.jsx           # Main menu, pause, leaderboard screens
+DeathScreen.jsx    # End screen + high score table
+hooks/
+useHighScores.js   # LocalStorage score persistence
+App.jsx              # Game state machine
+---
+
+## Run Locally
+
+```bash
+git clone https://github.com/ananya24s/DriftSpace.git
+cd DriftSpace
+npm install
+npm run dev
+```
+
+---
+
+## Roadmap
+
+- [ ] Power-ups (shield, rapid fire, bomb)
+- [ ] Sound effects
+- [ ] Mobile touch controls
+- [ ] Online leaderboard
+
+---
+
+## License
+
+MIT
