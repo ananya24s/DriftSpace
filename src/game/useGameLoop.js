@@ -4,7 +4,7 @@ import { Asteroid } from './Asteroid';
 import { Bullet } from './Bullet';
 import { Particle } from './Particle';
 import { GAME, ASTEROID } from './constants';
-
+import audioManager from '../assets/audio/AudioManager';
 export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate) {
   const stateRef = useRef({});
   const keysRef = useRef({});
@@ -88,12 +88,21 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       }
 
       // Shoot
-      if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
-        const bData = s.ship.shoot();
-        s.bullets.push(new Bullet(bData));
-        s.particles.push(...Particle.burst(bData.x, bData.y, 4, '#00e5ff', false));
-      }
+if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
+  const bData = s.ship.shoot();
 
+  audioManager.playShoot();
+
+  s.bullets.push(new Bullet(bData));
+  s.particles.push(...Particle.burst(bData.x, bData.y, 4, '#00e5ff', false));
+}
+     if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
+  const bData = s.ship.shoot();
+  s.bullets.push(new Bullet(bData));
+  s.particles.push(...Particle.burst(bData.x, bData.y, 4, '#00e5ff', false));
+
+  audioManager.playShoot();
+}
       // Spawn asteroids
       s.spawnTimer -= dt;
       if (s.spawnTimer <= 0) {
@@ -119,12 +128,14 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
             s.particles.push(...Particle.burst(b.x, b.y, 8 + (a.size > 30 ? 6 : 0), a.color, a.size > 30));
             shake(a.size > 30 ? 4 : 2, 6);
             if (a.hp <= 0) {
-              s.score += a.scoreValue();
-              s.kills++;
-              onScoreUpdate(s.score);
-              surviving.push(...Asteroid.split(a));
-              hit = true;
-            }
+  audioManager.playExplosion();
+
+  s.score += a.scoreValue();
+  s.kills++;
+  onScoreUpdate(s.score);
+  surviving.push(...Asteroid.split(a));
+  hit = true;
+}
           }
         });
         if (!hit) surviving.push(a);
@@ -135,8 +146,10 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       if (!s.ship.isInvincible()) {
         for (let a of s.asteroids) {
           if (a.hitsShip(s.ship)) {
-            s.lives--;
-            onLivesUpdate(s.lives);
+  audioManager.playPlayerHit();
+
+  s.lives--;
+  onLivesUpdate(s.lives);
             shake(10, 20);
             s.particles.push(...Particle.burst(s.ship.x, s.ship.y, 20, '#00e5ff', true));
             s.ship.hit();
