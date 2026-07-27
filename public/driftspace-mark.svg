@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144" role="img" aria-label="DriftSpace">
+  <defs>
+    <filter id="mk" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="blur"/>
+      <feFlood flood-color="#00e5ff" flood-opacity="0.95" result="c"/>
+      <feComposite in="c" in2="blur" operator="in" result="g"/>
+      <feMerge>
+        <feMergeNode in="g"/>
+        <feMergeNode in="g"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="144" height="144" fill="#030408"/>
+  <g filter="url(#mk)" transform="translate(72, 22)">
+    <polygon points="0,0 42,100 16,100 6,22 0,68 -6,22 -16,100 -42,100"
+             fill="#eaf7fc" stroke="#5fe4f7" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+    <polygon points="-13,76 13,76 10,92 -10,92"
+             fill="#eaf7fc" stroke="#5fe4f7" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+</svg>

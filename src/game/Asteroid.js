@@ -1,4 +1,5 @@
-import { ASTEROID, COLORS } from './constants';
+import { ASTEROID } from './constants';
+import { generateAsteroidPoints, randomAsteroidColor, drawAsteroidGlyph } from './asteroidGlyph';
 
 export class Asteroid {
   constructor(x, y, size, vx, vy) {
@@ -10,26 +11,8 @@ export class Asteroid {
     this.angle = 0;
     this.rotV = (Math.random() - 0.5) * 0.04;
     this.hp = size > 30 ? 2 : 1;
-    this.color = this._randomColor();
-    this.pts = this._generatePoints();
-  }
-
-  _randomColor() {
-    const r = Math.random();
-    if (r < 0.1) return COLORS.ASTEROID_RARE_1;
-    if (r < 0.2) return COLORS.ASTEROID_RARE_2;
-    return COLORS.ASTEROID_DEFAULT;
-  }
-
-  _generatePoints() {
-    const pts = [];
-    const n = Math.floor(Math.random() * 4) + 6;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const r = this.size * (0.7 + Math.random() * 0.5);
-      pts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
-    }
-    return pts;
+    this.color = randomAsteroidColor();
+    this.pts = generateAsteroidPoints(this.size);
   }
 
   static spawn(W, H, wave) {
@@ -90,19 +73,7 @@ export class Asteroid {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = this.size > 30 ? 8 : 4;
-    ctx.beginPath();
-    this.pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    ctx.closePath();
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle = this.color;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+    drawAsteroidGlyph(ctx, { pts: this.pts, color: this.color, size: this.size });
     ctx.restore();
   }
 }
