@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { Ship } from './Ship';
 import { Asteroid } from './Asteroid';
 import { Bullet } from './Bullet';
-import { Particle } from './Particle';
+import { Particle, ScorePopup } from './Particle';
 import { GAME, ASTEROID } from './constants';
 import audioManager from '../assets/audio/AudioManager';
 export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate) {
@@ -27,6 +27,10 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       shakeAmt: 0,
       shakeDur: 0,
       dead: false,
+      // Combo state — timer-based chain tracking
+      comboCount: 0,        // consecutive kills in the window
+      comboTimer: 0,        // countdown in dt units (2s window)
+      popups: [],           // ScorePopup instances
     };
   }, [canvasRef]);
 
@@ -87,22 +91,21 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
         s.particles.push(Particle.thrust(s.ship));
       }
 
+      // Combo timer decay
+      if (s.comboTimer > 0) {
+        s.comboTimer -= dt;
+        if (s.comboTimer <= 0) {
+          s.comboCount = 0; // window expired, reset chain
+        }
+      }
+
       // Shoot
-if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
-  const bData = s.ship.shoot();
-
-  audioManager.playShoot();
-
-  s.bullets.push(new Bullet(bData));
-  s.particles.push(...Particle.burst(bData.x, bData.y, 4, '#00e5ff', false));
-}
-     if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
-  const bData = s.ship.shoot();
-  s.bullets.push(new Bullet(bData));
-  s.particles.push(...Particle.burst(bData.x, bData.y, 4, '#00e5ff', false));
-
-  audioManager.playShoot();
-}
+      if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
+        const bData = s.ship.shoot();
+        audioManager.playShoot();
+        s.bullets.push(new Bullet(bData));
+        s.particles.push(...Particle.burst(bData.x, bData.y, 4, '#00e5ff', false));
+      }
       // Spawn asteroids
       s.spawnTimer -= dt;
       if (s.spawnTimer <= 0) {
@@ -128,14 +131,32 @@ if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
             s.particles.push(...Particle.burst(b.x, b.y, 8 + (a.size > 30 ? 6 : 0), a.color, a.size > 30));
             shake(a.size > 30 ? 4 : 2, 6);
             if (a.hp <= 0) {
-  audioManager.playExplosion();
+              audioManager.playExplosion();
 
-  s.score += a.scoreValue();
-  s.kills++;
-  onScoreUpdate(s.score);
-  surviving.push(...Asteroid.split(a));
-  hit = true;
-}
+              const pts = a.scoreValue();
+              s.score += pts;
+              s.kills++;
+
+              // Floating score popup at the kill position
+              s.popups.push(ScorePopup.fromKill(a.x, a.y, pts, a.size));
+
+              // Combo chain tracking
+              s.comboCount++;
+              s.comboTimer = 120; // ~2s at 60fps in dt units (dt≈1 per frame)
+
+              // Award chain bonus after 3+ consecutive kills
+              if (s.comboCount >= 3) {
+                // Bonus scales with chain length: 50 base + 25 per kill beyond 3
+                const bonus = 50 + Math.max(0, s.comboCount - 3) * 25;
+                s.score += bonus;
+                // Chain popup appears slightly above the kill point
+                s.popups.push(ScorePopup.chain(a.x, a.y - 28, bonus));
+              }
+
+              onScoreUpdate(s.score);
+              surviving.push(...Asteroid.split(a));
+              hit = true;
+            }
           }
         });
         if (!hit) surviving.push(a);
@@ -164,6 +185,9 @@ if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
 
       // Particles
       s.particles = s.particles.filter(p => { p.update(dt); return p.isAlive(); });
+
+      // Score popups
+      s.popups = s.popups.filter(p => { p.update(dt); return p.isAlive(); });
 
       // Screenshake decay
       if (s.shakeDur > 0) { s.shakeDur -= dt; if (s.shakeDur <= 0) s.shakeAmt *= 0.8; }
@@ -212,6 +236,9 @@ if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
 
       // Bullets
       s.bullets.forEach(b => b.draw(ctx));
+
+      // Score popups (drawn above asteroids/bullets, below ship)
+      s.popups.forEach(p => p.draw(ctx));
 
       // Ship
       s.ship.draw(ctx, keysRef.current);

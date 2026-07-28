@@ -52,3 +52,61 @@ export class Particle {
     ctx.globalAlpha = 1;
   }
 }
+/*
+  ScorePopup — floating score text that appears at the kill position
+  and drifts upward before fading out. Kept separate from Particle
+  because it renders text, not circles, and has fixed upward drift
+  rather than physics-based velocity.
+*/
+export class ScorePopup {
+  constructor(x, y, text, color = '#ffffff', big = false) {
+    this.x = x;
+    this.y = y;
+    this.text = text;
+    this.color = color;
+    this.life = 1;
+    this.decay = big ? 0.016 : 0.022;
+    this.vy = -(big ? 1.4 : 1.0); // upward drift, px per dt unit
+    this.fontSize = big ? 18 : 13;
+    this.big = big;
+  }
+
+  static fromKill(x, y, points, asteroidSize) {
+    const big = asteroidSize > 30;
+    const color = big ? '#ffd700' : '#00e5ff'; // gold for large, cyan for small
+    return new ScorePopup(x, y, `+${points}`, color, big);
+  }
+
+  static chain(x, y, bonus) {
+    // Chain reward popup — larger, white, short lived
+    const p = new ScorePopup(x, y, `CHAIN +${bonus}`, '#ffffff', true);
+    p.fontSize = 16;
+    p.decay = 0.012;
+    p.vy = -1.8;
+    return p;
+  }
+
+  update(dt) {
+    this.y += this.vy * dt;
+    this.life -= this.decay * dt;
+  }
+
+  isAlive() {
+    return this.life > 0;
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(this.life, 0) * 0.95;
+    ctx.fillStyle = this.color;
+    ctx.font = `${this.big ? 700 : 600} ${this.fontSize}px 'JetBrains Mono', 'Courier New', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Subtle glow matching the game's visual language
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = this.big ? 10 : 6;
+    ctx.fillText(this.text, this.x, this.y);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+}

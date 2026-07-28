@@ -65,6 +65,16 @@ class AudioManager {
       this.menuMusic.volume = 0;
       this.gameplayMusic.volume = 0;
     }
+
+    // Browsers block autoplay until the first user gesture. Register a
+    // one-time listener on every plausible interaction event so that the
+    // pending music track (set by playMenuMusic() on mount) retries the
+    // moment the user touches anything — before they even click Launch.
+    this._autoplayUnlocked = false;
+    this._unlockAutoplay = this._unlockAutoplay.bind(this);
+    ['click', 'keydown', 'touchstart', 'pointerdown'].forEach(evt =>
+      window.addEventListener(evt, this._unlockAutoplay, { once: false, passive: true })
+    );
   }
 
   // ---------- Preference persistence ----------
@@ -84,6 +94,40 @@ class AudioManager {
   /** Public getter — read mute state without touching internals. */
   get muted() {
     return this.isMuted;
+  }
+
+  // Retry the pending music track on the first user interaction.
+  // Removes itself after the track is successfully playing so it
+  // doesn't keep firing on every keypress.
+  _unlockAutoplay() {
+    if (this._autoplayUnlocked) return;
+    if (!this.currentMusic || !this.currentMusic.paused) {
+      // Nothing pending, or already playing — clean up listener.
+      this._autoplayUnlocked = true;
+      this._removeUnlockListeners();
+      return;
+    }
+    // currentMusic was set but play() was rejected by the browser.
+    // Retry it now that we have a user gesture.
+    const result = this.currentMusic.play();
+    if (result && typeof result.then === 'function') {
+      result.then(() => {
+        this._autoplayUnlocked = true;
+        this._removeUnlockListeners();
+      }).catch(() => {
+        // Still blocked (e.g. iframe policy) — leave listener in place
+        // to retry on the next interaction.
+      });
+    } else {
+      this._autoplayUnlocked = true;
+      this._removeUnlockListeners();
+    }
+  }
+
+  _removeUnlockListeners() {
+    ['click', 'keydown', 'touchstart', 'pointerdown'].forEach(evt =>
+      window.removeEventListener(evt, this._unlockAutoplay)
+    );
   }
 
   // ---------- Internal helpers ----------

@@ -73,25 +73,30 @@ export function DriftSpaceLogo({
   useLayoutEffect(() => {
     let cancelled = false;
 
-    const run = () => {
+    const measure = () => {
       if (cancelled) return;
       const mLeft  = measureText('DRIFTSP', EM, letterSpacing);
       const mRight = measureText('CE',      EM, letterSpacing);
       if (!cancelled) setM({
         wLeft:   mLeft.width,
         wRight:  mRight.width,
-        ascent:  mLeft.ascent,   // px above baseline
-        descent: mLeft.descent,  // px below baseline
+        ascent:  mLeft.ascent,
+        descent: mLeft.descent,
         ready: true,
       });
     };
 
-    // Try immediately (font may already be cached)
-    run();
-
-    // Re-run once the font is confirmed loaded
+    // Never measure with the fallback font — wait until Press Start 2P
+    // is confirmed loaded. The SVG stays opacity:0 (via m.ready=false)
+    // during this window so the user never sees the broken layout.
     if (document.fonts?.load) {
-      document.fonts.load(`${EM}px ${FONT_NAME}`).then(run).catch(run);
+      document.fonts
+        .load(`${EM}px ${FONT_NAME}`)
+        .then(measure)
+        .catch(measure); // measure anyway on error (best-effort)
+    } else {
+      // Fallback for environments without document.fonts
+      measure();
     }
 
     return () => { cancelled = true; };
