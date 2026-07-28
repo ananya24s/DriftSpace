@@ -253,7 +253,7 @@ Computer Science Undergraduate
 
 GitHub: https://github.com/ananya24s
 
-LinkedIn: *(Add your profile here)*
+LinkedIn: https://www.linkedin.com/in/ananya-singh-94496b343/
 
 ---
 
