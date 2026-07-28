@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./public/assets/ship.png" width="140"/>
+<img src="driftspace-mark.svg" width="140"/>
 
 # 🚀 DriftSpace
 
