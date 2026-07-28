@@ -1,5 +1,5 @@
-import { useState, useLayoutEffect, useId } from 'react';
-import { useReducedMotion } from 'framer-motion';
+import { useState, useLayoutEffect, useId, useEffect, useRef } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { MARK_BOUNDS, MarkShapes } from './DriftSpaceMark';
 
 /*
@@ -21,18 +21,23 @@ const PAD        = 30;    // padding around wordmark for glow bleed
 const SUB_SIZE   = 15;
 const SUB_GAP    = 18;
 
-// Measure text width using Canvas 2D — reliable once the font is loaded,
-// independent of SVG paint/layout timing.
+// Measure text metrics using Canvas 2D — reliable once the font is loaded.
+// Returns { width, ascent, descent } where ascent/descent are the actual
+// rendered pixel extents above/below the baseline, not typographic estimates.
 function measureText(text, fontSize, letterSpacing) {
   try {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     ctx.font = `${fontSize}px ${FONT_NAME}`;
-    const base = ctx.measureText(text).width;
-    // letter-spacing applies between each character pair (n-1 gaps)
-    return base + letterSpacing * Math.max(text.length - 1, 0);
+    const m = ctx.measureText(text);
+    const width = m.width + letterSpacing * Math.max(text.length - 1, 0);
+    // actualBoundingBox values give us the real rendered pixel extents
+    const ascent  = m.actualBoundingBoxAscent  ?? fontSize * 0.75;
+    const descent = m.actualBoundingBoxDescent ?? fontSize * 0.08;
+    return { width, ascent, descent };
   } catch {
-    return text.length * fontSize * 0.72; // safe fallback
+    const width = text.length * fontSize * 0.72;
+    return { width, ascent: fontSize * 0.75, descent: fontSize * 0.08 };
   }
 }
 
@@ -48,6 +53,7 @@ export function DriftSpaceLogo({
   subtitle    = null,
   pulse       = true,
   markFlaring = false,
+  markBobbing = false,
   title       = 'DriftSpace',
   style,
   className,
@@ -58,19 +64,26 @@ export function DriftSpaceLogo({
   // Emblem geometry (design units, scale to cap height)
   const s      = (CAP * markScale) / MARK_BOUNDS.height;
   const markW  = MARK_BOUNDS.width * s;
+  const emblemH = MARK_BOUNDS.height * s; // total emblem height in SVG units
   const markSW = 5.0;
 
   // Canvas-measured widths, re-computed once the font loads
-  const [m, setM] = useState({ wLeft: 0, wRight: 0, ready: false });
+  const [m, setM] = useState({ wLeft: 0, wRight: 0, ascent: 75, descent: 6, ready: false });
 
   useLayoutEffect(() => {
     let cancelled = false;
 
     const run = () => {
       if (cancelled) return;
-      const wLeft  = measureText('DRIFTSP', EM, letterSpacing);
-      const wRight = measureText('CE',      EM, letterSpacing);
-      if (!cancelled) setM({ wLeft, wRight, ready: true });
+      const mLeft  = measureText('DRIFTSP', EM, letterSpacing);
+      const mRight = measureText('CE',      EM, letterSpacing);
+      if (!cancelled) setM({
+        wLeft:   mLeft.width,
+        wRight:  mRight.width,
+        ascent:  mLeft.ascent,   // px above baseline
+        descent: mLeft.descent,  // px below baseline
+        ready: true,
+      });
     };
 
     // Try immediately (font may already be cached)
@@ -85,6 +98,11 @@ export function DriftSpaceLogo({
   }, [letterSpacing, markScale]);
 
   const baseline    = PAD + CAP;
+  // Real top and bottom of the rendered glyphs (measured, not guessed)
+  const glyphTop    = baseline - m.ascent;
+  const glyphBot    = baseline + m.descent;
+  const glyphMid    = (glyphTop + glyphBot) / 2;
+
   const markLeftX   = PAD + m.wLeft + letterSpacing + markGap.left;
   const markCenterX = markLeftX + markW / 2;
   const rightX      = markLeftX + markW + letterSpacing + markGap.right;
@@ -165,17 +183,29 @@ export function DriftSpaceLogo({
             <text x={rightX} y={baseline} {...textCommon}>CE</text>
           </g>
 
-          <g
-            transform={`translate(${markCenterX}, ${PAD + (82 - 100 * s) / 2 + 7}) scale(${s})`}
-            filter={`url(#markglow-${uid})`}
-            style={{ transition: 'opacity 0.4s ease' }}
-          >
-            <MarkShapes
-              fill={markFlaring ? '#ffffff' : markFill}
-              stroke={markFlaring ? '#ffffff' : markStroke}
-              strokeWidth={markFlaring ? markSW * 1.3 : markSW}
-              fillOpacity={markFlaring ? 1 : 0.95}
-            />
+          {/* Outer g positions the emblem; inner motion.g handles the bob.
+               Keeping them separate means the SVG transform stays stable
+               and only the visual layer animates. */}
+          <g transform={`translate(${markCenterX}, ${glyphMid - (emblemH / 2)})`}>
+            <motion.g
+              filter={`url(#markglow-${uid})`}
+              animate={
+                reduceMotion ? undefined :
+                markBobbing
+                  ? { y: [-5, 0], transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] } }
+                  : { y: 0, transition: { duration: 0.8, ease: 'easeOut' } }
+              }
+            >
+              <g transform={`scale(${s})`}>
+                <MarkShapes
+                  fill={markFlaring ? '#ffffff' : markFill}
+                  stroke={markFlaring ? '#ffffff' : markStroke}
+                  strokeWidth={markFlaring ? markSW * 1.3 : markSW}
+                  fillOpacity={markFlaring ? 1 : 0.95}
+                />
+
+              </g>
+            </motion.g>
           </g>
 
           {subtitle && (

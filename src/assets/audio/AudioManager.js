@@ -59,7 +59,31 @@ class AudioManager {
     // --- Volume / mute state ---
     this.musicVolume = DEFAULT_MUSIC_VOLUME;
     this.sfxVolumeScale = 1;
-    this.isMuted = false;
+    // Load persisted preference — all Audio objects must exist before this
+    this.isMuted = this._loadPreference();
+    if (this.isMuted) {
+      this.menuMusic.volume = 0;
+      this.gameplayMusic.volume = 0;
+    }
+  }
+
+  // ---------- Preference persistence ----------
+
+  _loadPreference() {
+    try {
+      return localStorage.getItem('driftspace-audio-muted') === 'true';
+    } catch { return false; }
+  }
+
+  _savePreference() {
+    try {
+      localStorage.setItem('driftspace-audio-muted', String(this.isMuted));
+    } catch {}
+  }
+
+  /** Public getter — read mute state without touching internals. */
+  get muted() {
+    return this.isMuted;
   }
 
   // ---------- Internal helpers ----------
@@ -238,6 +262,7 @@ _playSfx(name) {
 
 setMuted(isMuted) {
   this.isMuted = Boolean(isMuted);
+  this._savePreference();
 
   this.menuMusic.volume = this.isMuted
     ? 0

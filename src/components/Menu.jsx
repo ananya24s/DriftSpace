@@ -3,7 +3,9 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { drawShipGlyph } from '../game/shipGlyph';
 import { generateAsteroidPoints, randomAsteroidColor, drawAsteroidGlyph } from '../game/asteroidGlyph';
 import { DriftSpaceLogo } from './DriftSpaceLogo';
+import { useLeaderboard } from '../hooks/useLeaderboard';
 import { COLORS } from '../game/constants';
+import audioManager from '../assets/audio/AudioManager';
 
 const FONT_DISPLAY = "'Space Grotesk', 'Inter', sans-serif";
 const FONT_BODY = "'Inter', sans-serif";
@@ -169,6 +171,111 @@ const CONTROLS = [
    so there is no visual seam between the title screen and the
    moment Launch fires.
    ============================================================ */
+
+/* ============================================================
+   AUDIO TOGGLE — top-right corner, minimal SVG speaker icon.
+   Reads initial state from audioManager.muted (which itself
+   reads localStorage on construction), so the icon is correct
+   on first render with no flash.
+   ============================================================ */
+function SpeakerIcon({ muted }) {
+  return (
+    <svg
+      width="20" height="20" viewBox="0 0 20 20"
+      fill="none" xmlns="http://www.w3.org/2000/svg"
+      style={{ display: 'block' }}
+    >
+      {/* Speaker body */}
+      <polygon points="3,7 7,7 12,3 12,17 7,13 3,13"
+        fill="rgba(0,229,255,0.18)" stroke="#00e5ff"
+        strokeWidth="1.4" strokeLinejoin="round" />
+      {/* Sound waves — hidden when muted */}
+      {!muted && (
+        <>
+          <path d="M14 7.5 C15.2 8.4 15.2 11.6 14 12.5"
+            stroke="#00e5ff" strokeWidth="1.4"
+            strokeLinecap="round" fill="none" />
+          <path d="M15.8 5.5 C17.8 7.2 17.8 12.8 15.8 14.5"
+            stroke="#00e5ff" strokeWidth="1.4"
+            strokeLinecap="round" fill="none" opacity="0.6" />
+        </>
+      )}
+      {/* Mute slash */}
+      {muted && (
+        <line x1="3.5" y1="3.5" x2="16.5" y2="16.5"
+          stroke="#00e5ff" strokeWidth="1.5"
+          strokeLinecap="round" opacity="0.85" />
+      )}
+    </svg>
+  );
+}
+
+function AudioToggle({ reduceMotion }) {
+  const [muted, setMuted] = useState(() => audioManager.muted);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+
+  const handleClick = useCallback(() => {
+    audioManager.toggleMute();
+    setMuted(audioManager.muted);
+    setPressed(true);
+    setTimeout(() => setPressed(false), 140);
+  }, []);
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        onClick={handleClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => { setHovered(false); }}
+        title={muted ? 'Audio Off — click to unmute' : 'Audio On — click to mute'}
+        aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+        style={{
+          background: 'none',
+          border: '1px solid rgba(0,229,255,0.28)',
+          borderRadius: 4,
+          padding: '7px 8px',
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: hovered
+            ? '0 0 12px rgba(0,229,255,0.28), 0 0 24px rgba(0,229,255,0.12)'
+            : 'none',
+          transform: pressed
+            ? 'scale(0.88)'
+            : hovered ? 'scale(1.12)' : 'scale(1)',
+          transition: reduceMotion
+            ? 'none'
+            : 'transform 0.15s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+          borderColor: hovered
+            ? 'rgba(0,229,255,0.65)'
+            : 'rgba(0,229,255,0.28)',
+        }}
+      >
+        <SpeakerIcon muted={muted} />
+      </button>
+
+      {/* Tooltip */}
+      {hovered && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 8px)', right: 0,
+          background: 'rgba(3,4,8,0.92)',
+          border: '1px solid rgba(0,229,255,0.25)',
+          borderRadius: 3, padding: '4px 8px',
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, letterSpacing: 2,
+          color: 'rgba(0,229,255,0.85)',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+          animation: reduceMotion ? 'none' : 'none',
+          opacity: 1,
+        }}>
+          {muted ? 'AUDIO OFF' : 'AUDIO ON'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Menu({ onStart, onLeaderboard }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
@@ -183,11 +290,33 @@ export function Menu({ onStart, onLeaderboard }) {
   const [launching, setLaunching] = useState(false);
   const [launchHover, setLaunchHover] = useState(false);
   const [markFlaring, setMarkFlaring] = useState(false);
+  const [markBobbing, setMarkBobbing] = useState(false);
   const [logoHovered, setLogoHovered] = useState(false);
   const markFlareTimerRef = useRef(null);
   const markFlareRef = useRef(false); // tracks flare state for canvas sync
 
+  // Global leaderboard data for the ticker
+  const { scores: lbScores, load: lbLoad } = useLeaderboard();
+  const [tickerIdx, setTickerIdx] = useState(0);
+  const [tickerVisible, setTickerVisible] = useState(true);
+
   const prefersReducedMotion = useReducedMotion();
+
+  // Fetch global scores once on mount for the ticker
+  useEffect(() => { lbLoad(); }, [lbLoad]);
+
+  // Cycle ticker entries every 3.5s with a fade transition
+  useEffect(() => {
+    if (lbScores.length < 2) return;
+    const interval = setInterval(() => {
+      setTickerVisible(false);
+      setTimeout(() => {
+        setTickerIdx(i => (i + 1) % Math.min(lbScores.length, 10));
+        setTickerVisible(true);
+      }, 400);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [lbScores]);
 
   useEffect(() => {
     onStartRef.current = onStart;
@@ -593,14 +722,26 @@ export function Menu({ onStart, onLeaderboard }) {
   const triggerMarkFlare = useCallback((force = false) => {
     if (markFlareRef.current && !force) return; // already flaring, skip timer-only
     markFlareRef.current = true;
-    setMarkFlaring(true);
-    // Sync: push engine intensity on the canvas ship
-    if (worldRef.current) worldRef.current.ship.intensity = 2.2;
+    // Bob first (thruster fires → ship nudges up), then glow flare
+    setMarkBobbing(true);
+    setTimeout(() => setMarkBobbing(false), 600);
+    setTimeout(() => {
+      setMarkFlaring(true);
+      // Burst-thrust the canvas ship so its engine flicker visibly fires
+      if (worldRef.current) {
+        worldRef.current.ship.intensity = 2.4;
+        worldRef.current.ship.thrusting = true;
+      }
+    }, 60);
     clearTimeout(markFlareTimerRef.current);
     markFlareTimerRef.current = setTimeout(() => {
       markFlareRef.current = false;
       setMarkFlaring(false);
-      if (worldRef.current) worldRef.current.ship.intensity = 1;
+      // Return ship to its normal nav-driven thrusting state
+      if (worldRef.current) {
+        worldRef.current.ship.intensity = 1;
+        worldRef.current.ship.thrusting = false;
+      }
     }, 700);
   }, []);
 
@@ -621,6 +762,14 @@ export function Menu({ onStart, onLeaderboard }) {
       <GlobalStyle />
       <canvas ref={canvasRef} style={styles.canvas} />
 
+      {/* Audio toggle — fixed top-right, z above everything */}
+      <div style={{
+        position: 'fixed', top: 'clamp(16px, 2.5vh, 28px)',
+        right: 'clamp(16px, 2.5vw, 32px)', zIndex: 20,
+      }}>
+        <AudioToggle reduceMotion={!!prefersReducedMotion} />
+      </div>
+
       <div style={styles.content}>
         <div
           style={{ ...styles.logoWrap, pointerEvents: 'all' }}
@@ -631,6 +780,7 @@ export function Menu({ onStart, onLeaderboard }) {
             height={130}
             style={{ width: 'clamp(360px, 96vw, 1280px)', height: 'auto', cursor: 'default' }}
             markFlaring={markFlaring}
+            markBobbing={markBobbing}
           />
         </div>
 
@@ -672,12 +822,27 @@ export function Menu({ onStart, onLeaderboard }) {
           </span>
         </button>
 
+        {/* Arcade ticker — cycles through global top scores.
+             Clicking opens the full leaderboard. */}
         <button
-          style={{ ...styles.leaderboard, opacity: launching ? 0.25 : 1 }}
+          style={{ ...styles.ticker, opacity: launching ? 0.25 : 1 }}
           onClick={handleLeaderboard}
           disabled={launching}
         >
-          Leaderboard
+          <span style={styles.tickerLabel}>PILOTS</span>
+          <span style={styles.tickerSep}>·</span>
+          <span
+            style={{
+              ...styles.tickerEntry,
+              opacity: tickerVisible ? 1 : 0,
+              transform: tickerVisible ? 'translateY(0)' : 'translateY(4px)',
+            }}
+          >
+            {lbScores.length > 0
+              ? `${lbScores[tickerIdx]?.name ?? '—'}  ${(lbScores[tickerIdx]?.score ?? 0).toLocaleString()}`
+              : '· SCANNING DEEP SPACE ·'}
+          </span>
+          <span style={styles.tickerArrow}>›</span>
         </button>
 
       </div>
@@ -848,13 +1013,34 @@ const styles = {
     color: 'transparent', WebkitTextFillColor: 'transparent',
     transition: 'filter 0.28s ease, opacity 0.28s ease',
   },
-  leaderboard: {
+  ticker: {
     marginTop: 28,
-    background: 'none', border: 'none',
-    color: 'rgba(238,242,248,0.58)',
-    fontFamily: FONT_MONO, fontWeight: 400, fontSize: 11, letterSpacing: 3,
-    textTransform: 'uppercase', padding: '4px 2px', cursor: 'pointer',
-    transition: 'opacity 0.15s ease, color 0.15s ease',
+    background: 'rgba(0,229,255,0.03)',
+    border: '1px solid rgba(0,229,255,0.18)',
+    borderRadius: 2,
+    padding: '10px 18px',
+    display: 'flex', alignItems: 'center', gap: 10,
+    cursor: 'pointer',
+    transition: 'border-color 0.2s ease, background 0.2s ease, opacity 0.15s ease',
+    ':hover': { borderColor: 'rgba(0,229,255,0.45)' },
+  },
+  tickerLabel: {
+    fontFamily: FONT_MONO, fontSize: 9, letterSpacing: 3,
+    color: 'rgba(0,229,255,0.55)', textTransform: 'uppercase', flexShrink: 0,
+  },
+  tickerSep: {
+    color: 'rgba(0,229,255,0.25)', fontSize: 10, flexShrink: 0,
+  },
+  tickerEntry: {
+    fontFamily: FONT_MONO, fontSize: 11, letterSpacing: 2,
+    color: 'rgba(238,242,248,0.75)', textTransform: 'uppercase',
+    transition: 'opacity 0.35s ease, transform 0.35s ease',
+    flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  tickerArrow: {
+    color: 'rgba(0,229,255,0.4)', fontSize: 14, flexShrink: 0,
+    transition: 'color 0.2s ease',
   },
 
   // Controls: keycap-styled HUD legend, bottom-left corner.
