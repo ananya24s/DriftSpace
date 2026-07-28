@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { Ship } from './Ship';
 import { Asteroid } from './Asteroid';
 import { Bullet } from './Bullet';
-import { Particle, ScorePopup } from './Particle';
+import { Particle, DebrisShard, ImpactFlash, ScorePopup } from './Particle';
 import { GAME, ASTEROID } from './constants';
 import audioManager from '../assets/audio/AudioManager';
 export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate) {
@@ -27,10 +27,13 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       shakeAmt: 0,
       shakeDur: 0,
       dead: false,
-      // Combo state — timer-based chain tracking
-      comboCount: 0,        // consecutive kills in the window
-      comboTimer: 0,        // countdown in dt units (2s window)
-      popups: [],           // ScorePopup instances
+      comboCount: 0,
+      comboTimer: 0,
+      popups: [],
+      flashes: [],
+      shards: [],
+      prevWave: 1,
+      waveAnnounceTimer: 0,
     };
   }, [canvasRef]);
 
@@ -94,10 +97,15 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       // Combo timer decay
       if (s.comboTimer > 0) {
         s.comboTimer -= dt;
-        if (s.comboTimer <= 0) {
-          s.comboCount = 0; // window expired, reset chain
-        }
+        if (s.comboTimer <= 0) s.comboCount = 0;
       }
+
+      // Wave announcement trigger
+      if (s.wave !== s.prevWave) {
+        s.prevWave = s.wave;
+        s.waveAnnounceTimer = 180; // ~3s at 60fps
+      }
+      if (s.waveAnnounceTimer > 0) s.waveAnnounceTimer -= dt;
 
       // Shoot
       if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
@@ -133,24 +141,30 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
             if (a.hp <= 0) {
               audioManager.playExplosion();
 
-              const pts = a.scoreValue();
-              s.score += pts;
+              const pts  = a.scoreValue();
+              const big  = a.size > 30;
+              s.score   += pts;
               s.kills++;
 
-              // Floating score popup at the kill position
+              // Impact flash — brief white burst at kill point
+              s.flashes.push(ImpactFlash.fromAsteroid(a));
+
+              // Debris shards — line-segment spray
+              s.shards.push(
+                ...DebrisShard.burst(a.x, a.y, big ? 10 : 6, a.color, big)
+              );
+
+              // Floating score popup
               s.popups.push(ScorePopup.fromKill(a.x, a.y, pts, a.size));
 
-              // Combo chain tracking
+              // Combo chain
               s.comboCount++;
-              s.comboTimer = 120; // ~2s at 60fps in dt units (dt≈1 per frame)
-
-              // Award chain bonus after 3+ consecutive kills
+              s.comboTimer = 120;
               if (s.comboCount >= 3) {
-                // Bonus scales with chain length: 50 base + 25 per kill beyond 3
                 const bonus = 50 + Math.max(0, s.comboCount - 3) * 25;
                 s.score += bonus;
-                // Chain popup appears slightly above the kill point
                 s.popups.push(ScorePopup.chain(a.x, a.y - 28, bonus));
+                audioManager.playChain();
               }
 
               onScoreUpdate(s.score);
@@ -183,11 +197,11 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
         }
       }
 
-      // Particles
+      // Particles, flashes, shards, popups
       s.particles = s.particles.filter(p => { p.update(dt); return p.isAlive(); });
-
-      // Score popups
-      s.popups = s.popups.filter(p => { p.update(dt); return p.isAlive(); });
+      s.flashes   = s.flashes.filter(f => { f.update(dt); return f.isAlive(); });
+      s.shards    = s.shards.filter(sh => { sh.update(dt); return sh.isAlive(); });
+      s.popups    = s.popups.filter(p => { p.update(dt); return p.isAlive(); });
 
       // Screenshake decay
       if (s.shakeDur > 0) { s.shakeDur -= dt; if (s.shakeDur <= 0) s.shakeAmt *= 0.8; }
@@ -228,6 +242,9 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       });
       ctx.globalAlpha = 1;
 
+      // Impact flashes (behind everything)
+      s.flashes.forEach(f => f.draw(ctx));
+
       // Particles
       s.particles.forEach(p => p.draw(ctx));
 
@@ -237,7 +254,10 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       // Bullets
       s.bullets.forEach(b => b.draw(ctx));
 
-      // Score popups (drawn above asteroids/bullets, below ship)
+      // Debris shards (above asteroids, below ship)
+      s.shards.forEach(sh => sh.draw(ctx));
+
+      // Score popups
       s.popups.forEach(p => p.draw(ctx));
 
       // Ship
@@ -258,5 +278,5 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
     return () => cancelAnimationFrame(rafRef.current);
   }, [gameState]);
 
-  return { initState };
+  return { initState, stateRef };
 }

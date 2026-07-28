@@ -291,6 +291,14 @@ _playSfx(name) {
     this._playSfx('click');
   }
 
+  playChain() {
+    // Chain bonus audio: layered click + explosion at reduced volume.
+    // Uses existing assets — no new files needed.
+    this._playSfx('click');
+    // Slight delay on the explosion so the two hits feel distinct
+    setTimeout(() => this._playSfx('explosion'), 60);
+  }
+
   // ---------- Volume / mute controls ----------
 
   setMusicVolume(volume) {

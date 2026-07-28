@@ -6,6 +6,7 @@ import { DriftSpaceLogo } from './DriftSpaceLogo';
 import { useLeaderboard } from '../hooks/useLeaderboard';
 import { COLORS } from '../game/constants';
 import audioManager from '../assets/audio/AudioManager';
+import { AudioToggle } from './AudioToggle';
 
 const FONT_DISPLAY = "'Space Grotesk', 'Inter', sans-serif";
 const FONT_BODY = "'Inter', sans-serif";
@@ -178,103 +179,6 @@ const CONTROLS = [
    reads localStorage on construction), so the icon is correct
    on first render with no flash.
    ============================================================ */
-function SpeakerIcon({ muted }) {
-  return (
-    <svg
-      width="20" height="20" viewBox="0 0 20 20"
-      fill="none" xmlns="http://www.w3.org/2000/svg"
-      style={{ display: 'block' }}
-    >
-      {/* Speaker body */}
-      <polygon points="3,7 7,7 12,3 12,17 7,13 3,13"
-        fill="rgba(0,229,255,0.18)" stroke="#00e5ff"
-        strokeWidth="1.4" strokeLinejoin="round" />
-      {/* Sound waves — hidden when muted */}
-      {!muted && (
-        <>
-          <path d="M14 7.5 C15.2 8.4 15.2 11.6 14 12.5"
-            stroke="#00e5ff" strokeWidth="1.4"
-            strokeLinecap="round" fill="none" />
-          <path d="M15.8 5.5 C17.8 7.2 17.8 12.8 15.8 14.5"
-            stroke="#00e5ff" strokeWidth="1.4"
-            strokeLinecap="round" fill="none" opacity="0.6" />
-        </>
-      )}
-      {/* Mute slash */}
-      {muted && (
-        <line x1="3.5" y1="3.5" x2="16.5" y2="16.5"
-          stroke="#00e5ff" strokeWidth="1.5"
-          strokeLinecap="round" opacity="0.85" />
-      )}
-    </svg>
-  );
-}
-
-function AudioToggle({ reduceMotion }) {
-  const [muted, setMuted] = useState(() => audioManager.muted);
-  const [hovered, setHovered] = useState(false);
-  const [pressed, setPressed] = useState(false);
-
-  const handleClick = useCallback(() => {
-    audioManager.toggleMute();
-    setMuted(audioManager.muted);
-    setPressed(true);
-    setTimeout(() => setPressed(false), 140);
-  }, []);
-
-  return (
-    <div style={{ position: 'relative', display: 'inline-flex' }}>
-      <button
-        onClick={handleClick}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => { setHovered(false); }}
-        title={muted ? 'Audio Off — click to unmute' : 'Audio On — click to mute'}
-        aria-label={muted ? 'Unmute audio' : 'Mute audio'}
-        style={{
-          background: 'none',
-          border: '1px solid rgba(0,229,255,0.28)',
-          borderRadius: 4,
-          padding: '7px 8px',
-          cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: hovered
-            ? '0 0 12px rgba(0,229,255,0.28), 0 0 24px rgba(0,229,255,0.12)'
-            : 'none',
-          transform: pressed
-            ? 'scale(0.88)'
-            : hovered ? 'scale(1.12)' : 'scale(1)',
-          transition: reduceMotion
-            ? 'none'
-            : 'transform 0.15s ease, box-shadow 0.18s ease, border-color 0.18s ease',
-          borderColor: hovered
-            ? 'rgba(0,229,255,0.65)'
-            : 'rgba(0,229,255,0.28)',
-        }}
-      >
-        <SpeakerIcon muted={muted} />
-      </button>
-
-      {/* Tooltip */}
-      {hovered && (
-        <div style={{
-          position: 'absolute', bottom: 'calc(100% + 8px)', right: 0,
-          background: 'rgba(3,4,8,0.92)',
-          border: '1px solid rgba(0,229,255,0.25)',
-          borderRadius: 3, padding: '4px 8px',
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 9, letterSpacing: 2,
-          color: 'rgba(0,229,255,0.85)',
-          whiteSpace: 'nowrap',
-          pointerEvents: 'none',
-          animation: reduceMotion ? 'none' : 'none',
-          opacity: 1,
-        }}>
-          {muted ? 'AUDIO OFF' : 'AUDIO ON'}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function Menu({ onStart, onLeaderboard }) {
   const canvasRef = useRef(null);
@@ -767,7 +671,7 @@ export function Menu({ onStart, onLeaderboard }) {
         position: 'fixed', top: 'clamp(16px, 2.5vh, 28px)',
         right: 'clamp(16px, 2.5vw, 32px)', zIndex: 20,
       }}>
-        <AudioToggle reduceMotion={!!prefersReducedMotion} />
+        <AudioToggle />
       </div>
 
       <div style={styles.content}>
@@ -862,51 +766,64 @@ export function Menu({ onStart, onLeaderboard }) {
 }
 
 /* ============================================================
-   PAUSE SCREEN — unchanged presentation.
+   PAUSE SCREEN — redesigned to match game visual identity.
    ============================================================ */
-function PillButton({ children, onClick, variant = 'primary' }) {
-  const isPrimary = variant === 'primary';
+function PauseBtn({ children, onClick, primary }) {
+  const [hov, setHov] = useState(false);
   return (
-    <motion.button
+    <button
       onClick={onClick}
-      whileHover={
-        isPrimary
-          ? { scale: 1.04, boxShadow: '0 0 0 1px rgba(0,229,255,0.6), 0 0 40px rgba(0,229,255,0.3)' }
-          : { color: '#eef2f8' }
-      }
-      whileTap={{ scale: 0.96 }}
-      transition={{ type: 'spring', stiffness: 420, damping: 26 }}
-      style={isPrimary ? styles.pillPrimary : styles.pillGhost}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: primary
+          ? hov ? 'rgba(0,229,255,0.1)' : 'rgba(0,229,255,0.04)'
+          : 'transparent',
+        border: primary
+          ? `1px solid ${hov ? 'rgba(0,229,255,0.85)' : 'rgba(0,229,255,0.45)'}`
+          : 'none',
+        color: primary
+          ? hov ? '#fff' : '#00e5ff'
+          : hov ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.28)',
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: primary ? 11 : 8,
+        letterSpacing: primary ? 4 : 3,
+        padding: primary ? '16px 48px 14px' : '8px 4px',
+        cursor: 'pointer', borderRadius: primary ? 2 : 0,
+        boxShadow: primary && hov
+          ? '0 0 20px rgba(0,229,255,0.22), 0 0 40px rgba(0,229,255,0.1)'
+          : 'none',
+        transition: 'all 0.18s ease',
+      }}
     >
       {children}
-    </motion.button>
+    </button>
   );
 }
 
 export function PauseScreen({ onResume, onQuit }) {
   const reduceMotion = useReducedMotion();
+  const [vis, setVis] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setVis(true), 40); return () => clearTimeout(t); }, []);
 
   return (
-    <motion.div
-      style={styles.pauseOverlay}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.25 }}
-    >
+    <div style={styles.pauseOverlay}>
       <GlobalStyle />
-      <motion.div
-        style={styles.pauseContent}
-        initial={reduceMotion ? undefined : { opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div style={styles.pauseTitle}>Paused</div>
+      <div style={{
+        ...styles.pauseContent,
+        opacity: vis ? 1 : 0,
+        transform: vis ? 'translateY(0)' : 'translateY(10px)',
+        transition: reduceMotion ? 'none' : 'opacity 0.3s ease, transform 0.3s ease',
+      }}>
+        <div style={styles.pauseTitle}>PAUSED</div>
+        <div style={styles.pauseDivider} />
         <div style={styles.pillRow}>
-          <PillButton variant="primary" onClick={onResume}>Resume</PillButton>
-          <PillButton variant="ghost" onClick={onQuit}>Quit to Menu</PillButton>
+          <PauseBtn primary onClick={onResume}>RESUME</PauseBtn>
+          <PauseBtn onClick={onQuit}>QUIT TO MENU</PauseBtn>
         </div>
-      </motion.div>
-    </motion.div>
+        <div style={styles.pauseHint}>[ P ] to resume</div>
+      </div>
+    </div>
   );
 }
 
@@ -1078,25 +995,26 @@ const styles = {
   /* -- pause screen (unchanged) -- */
   pauseOverlay: {
     position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: 'rgba(4,5,10,0.74)', backdropFilter: 'blur(3px)',
+    background: 'rgba(3,4,8,0.82)', backdropFilter: 'blur(3px)',
   },
-  pauseContent: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
+  pauseContent: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    border: '1px solid rgba(0,229,255,0.18)',
+    background: 'rgba(0,229,255,0.02)',
+    padding: '44px 64px 36px',
+  },
   pauseTitle: {
-    fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 28, letterSpacing: 6,
-    color: '#eef2f8', marginBottom: 32, textTransform: 'uppercase',
+    fontFamily: "'Press Start 2P', monospace", fontSize: 20, letterSpacing: 5,
+    color: '#eaf7fc', marginBottom: 28,
+    textShadow: '0 0 24px rgba(0,229,255,0.55)',
+  },
+  pauseDivider: {
+    width: '100%', height: 1,
+    background: 'rgba(0,229,255,0.15)', marginBottom: 28,
   },
   pillRow: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 },
-  pillPrimary: {
-    background: 'linear-gradient(180deg, rgba(0,229,255,0.14), rgba(0,229,255,0.05))',
-    border: '1px solid rgba(0,229,255,0.45)',
-    color: '#eef2f8',
-    fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, letterSpacing: 3,
-    padding: '15px 52px', borderRadius: 999, cursor: 'pointer',
-  },
-  pillGhost: {
-    background: 'transparent', border: 'none',
-    color: 'rgba(238,242,248,0.6)',
-    fontFamily: FONT_BODY, fontWeight: 500, fontSize: 12, letterSpacing: 3,
-    textTransform: 'uppercase', padding: '8px 18px', cursor: 'pointer',
+  pauseHint: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: 3,
+    color: 'rgba(255,255,255,0.2)', marginTop: 24, textTransform: 'uppercase',
   },
 };

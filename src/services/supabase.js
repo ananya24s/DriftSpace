@@ -16,13 +16,30 @@ export async function submitScore(name, score) {
 }
 
 export async function fetchTopScores(limit = 20) {
+  // Fetch more rows than needed so that after deduplication (one entry
+  // per pilot name, keeping their personal best) we still have enough
+  // to fill the requested number of slots.
   const { data, error } = await supabase
     .from('scores')
     .select('id, name, score, created_at')
     .order('score', { ascending: false })
-    .limit(limit);
+    .limit(limit * 6);
   if (error) throw error;
-  return data;
+
+  // Deduplicate: keep only the highest score per unique name.
+  // Since rows are already sorted descending, the first occurrence
+  // of each name is always their personal best.
+  const seen = new Set();
+  const deduped = [];
+  for (const row of data) {
+    const key = row.name.toUpperCase().trim();
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(row);
+      if (deduped.length >= limit) break;
+    }
+  }
+  return deduped;
 }
 
 export async function fetchPilotCount() {
