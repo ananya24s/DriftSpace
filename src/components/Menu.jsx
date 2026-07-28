@@ -59,11 +59,19 @@ function clampOutsideRect(obj, rect, pad) {
 // purple/orange from randomAsteroidColor's own distribution) actually
 // shows up, while large open regions remain.
 function spawnAsteroidField(W, H, contentRect, controlsRect) {
-  const depths = [...Array(5).fill('far'), ...Array(4).fill('mid'), ...Array(3).fill('near')];
+  // Match gameplay size distribution: tiny fragments up to large chunks.
+  // One 'hero' large rock per field gives the scene a visual anchor.
+  const depths = [
+    ...Array(7).fill('far'),   // small, dim, slow
+    ...Array(6).fill('mid'),   // medium
+    ...Array(4).fill('near'),  // larger, brighter, faster
+    ...Array(2).fill('hero'),  // large slow background anchors
+  ];
   const ranges = {
-    far: { size: [5, 9], speed: [1, 3], alpha: [0.3, 0.46] },
-    mid: { size: [8, 14], speed: [2.5, 5], alpha: [0.5, 0.7] },
-    near: { size: [12, 21], speed: [4, 9], alpha: [0.78, 0.98] },
+    far:  { size: [6,  13], speed: [0.8, 2.5], alpha: [0.25, 0.42] },
+    mid:  { size: [13, 24], speed: [2,   4.5], alpha: [0.48, 0.68] },
+    near: { size: [22, 36], speed: [3.5, 7],   alpha: [0.72, 0.95] },
+    hero: { size: [32, 44], speed: [0.4, 1.2], alpha: [0.28, 0.42] },
   };
   return depths.map((depth) => {
     const r = ranges[depth];
@@ -107,7 +115,17 @@ function GlobalStyle() {
   return (
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-      /* ── Press Start 2P arcade LAUNCH animations ────────────────── */
+      /* ── Border sweep: the 1px cyan border gets its own specular pass,
+         separate from the text sweep so the box feels like a physical
+         lit panel rather than just a styled <div>. ───────────────────── */
+      @keyframes ds-border-sweep {
+        0%   { border-color: rgba(0,229,255,0.35); box-shadow: 0 0 10px rgba(0,229,255,0.12) inset, 0 0 10px rgba(0,229,255,0.08); }
+        45%  { border-color: rgba(0,229,255,0.9);  box-shadow: 0 0 22px rgba(0,229,255,0.28) inset, 0 0 22px rgba(0,229,255,0.22); }
+        55%  { border-color: rgba(0,229,255,0.9);  box-shadow: 0 0 22px rgba(0,229,255,0.28) inset, 0 0 22px rgba(0,229,255,0.22); }
+        100% { border-color: rgba(0,229,255,0.35); box-shadow: 0 0 10px rgba(0,229,255,0.12) inset, 0 0 10px rgba(0,229,255,0.08); }
+      }
+
+            /* ── Press Start 2P arcade LAUNCH animations ────────────────── */
 
       /* Breath: the whole word idles with a gentle slow dim-and-return,
          suggesting standby. Depth changes to 4% scale on hover
@@ -137,10 +155,11 @@ function GlobalStyle() {
 }
 
 const CONTROLS = [
-  ['WASD', 'Navigate'],
+  ['W',     'Thrust'],
+  ['A / D', 'Turn'],
   ['SPACE', 'Fire'],
-  ['P', 'Pause'],
-  ['R', 'Retry'],
+  ['P',     'Pause'],
+  ['R',     'Retry'],
 ];
 
 /* ============================================================
@@ -163,6 +182,10 @@ export function Menu({ onStart, onLeaderboard }) {
 
   const [launching, setLaunching] = useState(false);
   const [launchHover, setLaunchHover] = useState(false);
+  const [markFlaring, setMarkFlaring] = useState(false);
+  const [logoHovered, setLogoHovered] = useState(false);
+  const markFlareTimerRef = useRef(null);
+  const markFlareRef = useRef(false); // tracks flare state for canvas sync
 
   const prefersReducedMotion = useReducedMotion();
 
@@ -220,12 +243,12 @@ export function Menu({ onStart, onLeaderboard }) {
       vignette.addColorStop(1, 'rgba(0,0,0,0.32)');
 
       // Protected rects — enlarged to match the bigger hero cluster.
-      const contentRect = { x: W * 0.30, y: H * 0.34, w: 690, h: 350 };
+      const contentRect = { x: W * 0.02, y: H * 0.25, w: W * 0.96, h: H * 0.50 };
       const controlsRect = { x: 8, y: H - 92, w: 400, h: 82 };
 
       // Hero zone: where the ship travels. Slightly larger patch of sky
       // to match the increased hero presence, still left of the text.
-      const heroZone = { xMin: W * 0.05, xMax: W * 0.28, yMin: H * 0.16, yMax: H * 0.64 };
+      const heroZone = { xMin: W * 0.03, xMax: W * 0.16, yMin: H * 0.08, yMax: H * 0.42 };
       const heroCenter = { x: (heroZone.xMin + heroZone.xMax) / 2, y: (heroZone.yMin + heroZone.yMax) / 2 };
 
       worldRef.current = {
@@ -564,20 +587,67 @@ export function Menu({ onStart, onLeaderboard }) {
     onLeaderboard();
   }, [onLeaderboard]);
 
+  // Trigger a mark flare: brightens the ship-A glow for 600ms, and
+  // simultaneously bumps the canvas ship's engine intensity so the
+  // A and the drifting ship feel like the same craft responding.
+  const triggerMarkFlare = useCallback((force = false) => {
+    if (markFlareRef.current && !force) return; // already flaring, skip timer-only
+    markFlareRef.current = true;
+    setMarkFlaring(true);
+    // Sync: push engine intensity on the canvas ship
+    if (worldRef.current) worldRef.current.ship.intensity = 2.2;
+    clearTimeout(markFlareTimerRef.current);
+    markFlareTimerRef.current = setTimeout(() => {
+      markFlareRef.current = false;
+      setMarkFlaring(false);
+      if (worldRef.current) worldRef.current.ship.intensity = 1;
+    }, 700);
+  }, []);
+
+  // Schedule rare autonomous flares (every 8–14s, randomised)
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    let timer;
+    const schedule = () => {
+      const delay = 8000 + Math.random() * 6000;
+      timer = setTimeout(() => { triggerMarkFlare(); schedule(); }, delay);
+    };
+    schedule();
+    return () => { clearTimeout(timer); clearTimeout(markFlareTimerRef.current); };
+  }, [triggerMarkFlare, prefersReducedMotion]);
+
   return (
     <div style={styles.screen}>
       <GlobalStyle />
       <canvas ref={canvasRef} style={styles.canvas} />
 
       <div style={styles.content}>
-        <div style={styles.logoWrap}>
-          <DriftSpaceLogo height={110} style={{ width: 'clamp(340px, 44vw, 640px)', height: 'auto' }} />
+        <div
+          style={{ ...styles.logoWrap, pointerEvents: 'all' }}
+          onMouseEnter={() => { setLogoHovered(true); triggerMarkFlare(true); }}
+          onMouseLeave={() => setLogoHovered(false)}
+        >
+          <DriftSpaceLogo
+            height={130}
+            style={{ width: 'clamp(360px, 96vw, 1280px)', height: 'auto', cursor: 'default' }}
+            markFlaring={markFlaring}
+          />
         </div>
 
         <button
           style={{
             ...styles.launchBtn,
             opacity: launching ? 0.45 : 1,
+            // Hover: border brightens and inner glow intensifies
+            borderColor: launchHover && !launching
+              ? 'rgba(0,229,255,0.92)'
+              : undefined,
+            boxShadow: launchHover && !launching
+              ? '0 0 28px rgba(0,229,255,0.32) inset, 0 0 32px rgba(0,229,255,0.28), 0 0 64px rgba(0,229,255,0.12)'
+              : undefined,
+            animation: prefersReducedMotion || launchHover || launching
+              ? 'none'
+              : 'ds-border-sweep 5s ease-in-out infinite',
           }}
           onMouseEnter={() => { hoveredRef.current = true; setLaunchHover(true); }}
           onMouseLeave={() => { hoveredRef.current = false; setLaunchHover(false); }}
@@ -587,9 +657,6 @@ export function Menu({ onStart, onLeaderboard }) {
           <span
             style={{
               ...styles.launchText,
-              /* Sweep animation: idle vs hover differ in speed + rest.
-                 Breath only runs at idle — hover replaces it with the
-                 brighter hover state via filter/opacity transition. */
               animation: prefersReducedMotion
                 ? 'none'
                 : launchHover && !launching
@@ -613,15 +680,17 @@ export function Menu({ onStart, onLeaderboard }) {
           Leaderboard
         </button>
 
-        <div style={styles.controlsStrip}>
-          {CONTROLS.map(([key, label], i) => (
-            <span key={key} style={styles.controlItem}>
-              <span style={styles.controlKey}>{key}</span>
-              <span style={styles.controlLabel}>{label}</span>
-              {i < CONTROLS.length - 1 && <span style={styles.controlDot}>·</span>}
-            </span>
-          ))}
-        </div>
+      </div>
+
+      {/* Controls HUD — fixed bottom-left, outside the centered stack */}
+      <div style={styles.controlsStrip}>
+        {CONTROLS.map(([key, label], i) => (
+          <span key={key} style={styles.controlItem}>
+            <span style={styles.controlKeyCap}>{key}</span>
+            <span style={styles.controlLabel}>{label}</span>
+            {i < CONTROLS.length - 1 && <span style={styles.controlSep} />}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -734,68 +803,91 @@ const styles = {
   // the centre of attention occupies more of the screen.
   content: {
     position: 'absolute',
-    left: 'calc(30% + 20px)', top: 'calc(50% - 40px)', transform: 'translateY(-6%)',
+    left: '50%', top: '52%', transform: 'translate(-50%, -50%)',
     zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-    width: 'fit-content',
+    width: 'min(92vw, 1060px)',
   },
-  logoWrap: { marginBottom: 52 },
+  logoWrap: { marginBottom: 36 },
   callsign: {
     fontFamily: FONT_MONO, fontSize: 14, letterSpacing: 4,
     color: 'rgba(0,229,255,0.75)', marginBottom: 26, textTransform: 'uppercase',
   },
+  // Arcade cabinet box: 1px cyan border, dark inner tint, no fill.
+  // The border gets its own sweep animation (ds-border-sweep) so the
+  // box reads as a lit physical panel, not a CSS styled div.
   launchBtn: {
-    background: 'none', border: 'none', padding: '8px 6px 4px', margin: 0,
-    cursor: 'pointer', lineHeight: 1,
-    transition: 'opacity 0.2s ease',
+    background: 'rgba(0,229,255,0.04)',
+    border: '1px solid rgba(0,229,255,0.35)',
+    borderRadius: 2,
+    padding: '18px 52px 16px',
+    margin: 0, cursor: 'pointer', lineHeight: 1,
+    transition: 'border-color 0.22s ease, box-shadow 0.22s ease, opacity 0.2s ease',
+    // Initial inset shadow gives depth without paint
+    boxShadow: '0 0 10px rgba(0,229,255,0.12) inset, 0 0 10px rgba(0,229,255,0.08)',
   },
   launchText: {
     display: 'inline-block',
-    // Press Start 2P — a genuine pixel/arcade display face.
-    // No weight or style variant exists; using it as-is is correct.
     fontFamily: "'Press Start 2P', monospace",
-    fontSize: 34,
-    letterSpacing: 8,
+    fontSize: 28,
+    letterSpacing: 10,
     textTransform: 'uppercase',
-    // The sweep is a narrow bright band inside a wider gradient:
-    // the band sits at 50% of the background-size and travels via
-    // background-position driven by the keyframe animation.
     backgroundImage: [
       'linear-gradient(',
-      '  100deg,',
-      '  #00b8d9  0%,',         // base cyan left edge
-      '  #00d4f0 28%,',         // building toward the band
-      '  #d4f8ff 48%,',         // ← bright specular highlight band
-      '  #ffffff 50%,',         // ← peak (the "sweep" light)
-      '  #d4f8ff 52%,',         // trailing edge
-      '  #00d4f0 72%,',         // returning to base
-      '  #00b8d9 100%',         // base cyan right edge
-      ')',
+      '100deg,',
+      '#00b8d9 0%,',
+      '#00d4f0 28%,',
+      '#d4f8ff 48%,',
+      '#ffffff 50%,',
+      '#d4f8ff 52%,',
+      '#00d4f0 72%,',
+      '#00b8d9 100%)',
     ].join(''),
     backgroundSize: '320% 100%',
     backgroundPosition: '-60% center',
     WebkitBackgroundClip: 'text', backgroundClip: 'text',
     color: 'transparent', WebkitTextFillColor: 'transparent',
     transition: 'filter 0.28s ease, opacity 0.28s ease',
-    imageRendering: 'pixelated',
   },
   leaderboard: {
-    marginTop: 26,
+    marginTop: 28,
     background: 'none', border: 'none',
-    color: 'rgba(238,242,248,0.42)',
-    fontFamily: FONT_BODY, fontWeight: 500, fontSize: 13, letterSpacing: 2.5,
-    textTransform: 'uppercase', padding: '2px', cursor: 'pointer',
+    color: 'rgba(238,242,248,0.58)',
+    fontFamily: FONT_MONO, fontWeight: 400, fontSize: 11, letterSpacing: 3,
+    textTransform: 'uppercase', padding: '4px 2px', cursor: 'pointer',
     transition: 'opacity 0.15s ease, color 0.15s ease',
   },
 
-  // Controls: larger and a touch higher-contrast, still quiet.
+  // Controls: keycap-styled HUD legend, bottom-left corner.
+  // Each key is a small bordered cap; the label sits beside it.
   controlsStrip: {
-    position: 'fixed', left: 'clamp(24px, 4vw, 48px)', bottom: 'clamp(24px, 4vh, 42px)',
-    display: 'flex', flexWrap: 'wrap', gap: 12, rowGap: 8,
+    position: 'fixed',
+    left: 'clamp(20px, 3vw, 40px)',
+    bottom: 'clamp(20px, 3vh, 36px)',
+    zIndex: 10,
+    display: 'flex', flexWrap: 'wrap', gap: 12, rowGap: 8, alignItems: 'center',
   },
-  controlItem: { display: 'flex', alignItems: 'center', gap: 10 },
-  controlKey: { fontFamily: FONT_MONO, fontSize: 12.5, color: 'rgba(0,229,255,0.72)', letterSpacing: 1 },
-  controlLabel: { fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(238,242,248,0.42)', letterSpacing: 0.5 },
-  controlDot: { color: 'rgba(255,255,255,0.2)', fontSize: 12, marginLeft: 2 },
+  controlItem: { display: 'flex', alignItems: 'center', gap: 6 },
+  controlKeyCap: {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    fontFamily: FONT_MONO, fontSize: 9.5, fontWeight: 500,
+    color: 'rgba(0,229,255,0.85)',
+    border: '1px solid rgba(0,229,255,0.4)',
+    borderRadius: 3,
+    padding: '3px 6px 2px',
+    lineHeight: 1,
+    background: 'rgba(0,229,255,0.05)',
+    boxShadow: '0 1px 0 rgba(0,229,255,0.2)',
+    letterSpacing: 0.5,
+    minWidth: 18, textAlign: 'center',
+  },
+  controlLabel: {
+    fontFamily: FONT_BODY, fontSize: 10.5, fontWeight: 400,
+    color: 'rgba(238,242,248,0.32)', letterSpacing: 0.3,
+  },
+  controlSep: {
+    display: 'inline-block', width: 1, height: 11,
+    background: 'rgba(255,255,255,0.08)', marginLeft: 2,
+  },
 
   /* -- pause screen (unchanged) -- */
   pauseOverlay: {
