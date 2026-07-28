@@ -9,6 +9,7 @@ const FONT_DISPLAY = "'Space Grotesk', 'Inter', sans-serif";
 const FONT_BODY = "'Inter', sans-serif";
 const FONT_MONO = "'JetBrains Mono', 'Courier New', monospace";
 
+
 // Hero group scale-up (~25%): the ship is drawn slightly larger and
 // the DOM hero cluster is enlarged/spaced to match, so the centre of
 // attention occupies more of the screen without zooming the world.
@@ -105,10 +106,31 @@ function spawnWreckage(W, H) {
 function GlobalStyle() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-      @keyframes ds-launch-pulse {
-        0%, 100% { opacity: 0.55; }
-        50% { opacity: 1; }
+      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+      /* ── Press Start 2P arcade LAUNCH animations ────────────────── */
+
+      /* Breath: the whole word idles with a gentle slow dim-and-return,
+         suggesting standby. Depth changes to 4% scale on hover
+         via inline style; this keyframe handles idle-only opacity. */
+      @keyframes ds-px-breath {
+        0%, 100% { opacity: 0.72; }
+        50%      { opacity: 1; }
+      }
+
+      /* Sweep: a single bright specular band travels across the face
+         of the word, like a CRT stripe or scoreboard cycling.
+         Background-position drives it; the band is a narrow highlight
+         inside the background gradient.
+         Idle: one pass every 5s with a long rest after.
+         Hover: one pass every 1.6s, no rest — rapid cycling. */
+      @keyframes ds-px-sweep-idle {
+        0%   { background-position: 240% center; }
+        48%  { background-position: -60% center; }
+        100% { background-position: -60% center; }
+      }
+      @keyframes ds-px-sweep-hover {
+        0%   { background-position: 240% center; }
+        100% { background-position: -60% center; }
       }
     `}</style>
   );
@@ -198,7 +220,7 @@ export function Menu({ onStart, onLeaderboard }) {
       vignette.addColorStop(1, 'rgba(0,0,0,0.32)');
 
       // Protected rects — enlarged to match the bigger hero cluster.
-      const contentRect = { x: W * 0.30 + 20, y: H * 0.50 - 120, w: 520, h: 340 };
+      const contentRect = { x: W * 0.30, y: H * 0.34, w: 690, h: 350 };
       const controlsRect = { x: 8, y: H - 92, w: 400, h: 82 };
 
       // Hero zone: where the ship travels. Slightly larger patch of sky
@@ -549,16 +571,13 @@ export function Menu({ onStart, onLeaderboard }) {
 
       <div style={styles.content}>
         <div style={styles.logoWrap}>
-          <DriftSpaceLogo height={84} />
+          <DriftSpaceLogo height={110} style={{ width: 'clamp(340px, 44vw, 640px)', height: 'auto' }} />
         </div>
 
         <button
           style={{
-            ...styles.launch,
-            color: launching ? 'rgba(238,242,248,0.4)' : launchHover ? '#eef2f8' : COLORS.SHIP,
-            textShadow: launchHover && !launching
-              ? '0 0 24px rgba(0,229,255,0.65), 0 0 48px rgba(0,229,255,0.35)'
-              : '0 0 18px rgba(0,229,255,0.35)',
+            ...styles.launchBtn,
+            opacity: launching ? 0.45 : 1,
           }}
           onMouseEnter={() => { hoveredRef.current = true; setLaunchHover(true); }}
           onMouseLeave={() => { hoveredRef.current = false; setLaunchHover(false); }}
@@ -567,21 +586,23 @@ export function Menu({ onStart, onLeaderboard }) {
         >
           <span
             style={{
-              ...styles.launchMark,
-              transform: launchHover ? 'translateX(6px)' : 'translateX(0)',
-              opacity: launching ? 0.4 : 1,
+              ...styles.launchText,
+              /* Sweep animation: idle vs hover differ in speed + rest.
+                 Breath only runs at idle — hover replaces it with the
+                 brighter hover state via filter/opacity transition. */
+              animation: prefersReducedMotion
+                ? 'none'
+                : launchHover && !launching
+                  ? 'ds-px-sweep-hover 1.6s linear infinite'
+                  : 'ds-px-sweep-idle 5s linear infinite, ds-px-breath 2.6s ease-in-out infinite',
+              filter: launchHover && !launching
+                ? 'drop-shadow(0 0 14px rgba(0,229,255,1)) drop-shadow(0 0 36px rgba(0,229,255,0.5))'
+                : 'drop-shadow(0 0 8px rgba(0,229,255,0.55))',
+              opacity: launchHover && !launching ? 1 : undefined,
             }}
           >
-            ›
+            LAUNCH
           </span>
-          <span style={styles.launchWord}>Launch</span>
-          <span
-            style={{
-              ...styles.launchUnderline,
-              transform: launchHover ? 'scaleX(1)' : 'scaleX(0.4)',
-              opacity: launchHover ? 1 : 0.5,
-            }}
-          />
         </button>
 
         <button
@@ -713,32 +734,49 @@ const styles = {
   // the centre of attention occupies more of the screen.
   content: {
     position: 'absolute',
-    left: 'calc(30% + 40px)', top: 'calc(50% - 24px)', transform: 'translateY(-4%)',
-    zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-    maxWidth: 'min(84vw, 440px)',
+    left: 'calc(30% + 20px)', top: 'calc(50% - 40px)', transform: 'translateY(-6%)',
+    zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+    width: 'fit-content',
   },
-  logoWrap: { marginBottom: 40, marginLeft: -4 },
+  logoWrap: { marginBottom: 52 },
   callsign: {
     fontFamily: FONT_MONO, fontSize: 14, letterSpacing: 4,
     color: 'rgba(0,229,255,0.75)', marginBottom: 26, textTransform: 'uppercase',
   },
-  // Launch as a primary in-world action: large display type, a
-  // leading chevron, a persistent soft glow that intensifies on hover,
-  // and an animated underline "charge" — no card, border, or fill.
-  launch: {
-    position: 'relative',
-    display: 'flex', alignItems: 'center', gap: 12,
-    background: 'none', border: 'none',
-    fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 30, letterSpacing: 3,
-    padding: '6px 2px 12px', cursor: 'pointer', transition: 'color 0.15s ease, text-shadow 0.2s ease',
+  launchBtn: {
+    background: 'none', border: 'none', padding: '8px 6px 4px', margin: 0,
+    cursor: 'pointer', lineHeight: 1,
+    transition: 'opacity 0.2s ease',
   },
-  launchMark: { fontSize: 30, transition: 'transform 0.22s ease, opacity 0.15s ease' },
-  launchWord: { position: 'relative', zIndex: 1 },
-  launchUnderline: {
-    position: 'absolute', left: 2, right: 2, bottom: 2, height: 2,
-    background: 'linear-gradient(90deg, rgba(0,229,255,0.9), rgba(0,229,255,0))',
-    transformOrigin: 'left center',
-    transition: 'transform 0.28s ease, opacity 0.2s ease',
+  launchText: {
+    display: 'inline-block',
+    // Press Start 2P — a genuine pixel/arcade display face.
+    // No weight or style variant exists; using it as-is is correct.
+    fontFamily: "'Press Start 2P', monospace",
+    fontSize: 34,
+    letterSpacing: 8,
+    textTransform: 'uppercase',
+    // The sweep is a narrow bright band inside a wider gradient:
+    // the band sits at 50% of the background-size and travels via
+    // background-position driven by the keyframe animation.
+    backgroundImage: [
+      'linear-gradient(',
+      '  100deg,',
+      '  #00b8d9  0%,',         // base cyan left edge
+      '  #00d4f0 28%,',         // building toward the band
+      '  #d4f8ff 48%,',         // ← bright specular highlight band
+      '  #ffffff 50%,',         // ← peak (the "sweep" light)
+      '  #d4f8ff 52%,',         // trailing edge
+      '  #00d4f0 72%,',         // returning to base
+      '  #00b8d9 100%',         // base cyan right edge
+      ')',
+    ].join(''),
+    backgroundSize: '320% 100%',
+    backgroundPosition: '-60% center',
+    WebkitBackgroundClip: 'text', backgroundClip: 'text',
+    color: 'transparent', WebkitTextFillColor: 'transparent',
+    transition: 'filter 0.28s ease, opacity 0.28s ease',
+    imageRendering: 'pixelated',
   },
   leaderboard: {
     marginTop: 26,
