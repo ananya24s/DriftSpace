@@ -159,6 +159,7 @@ function GlobalStyle() {
 
 const CONTROLS = [
   ['W',     'Thrust'],
+  ['S',     'Reverse'],
   ['A / D', 'Turn'],
   ['SPACE', 'Fire'],
   ['P',     'Pause'],
