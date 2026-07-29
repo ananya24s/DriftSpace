@@ -1,21 +1,26 @@
 <div align="center">
 
-<img src="driftspace-mark.svg" width="140"/>
+<img src="public/driftspace-mark.svg" alt="DriftSpace Logo" width="140"/>
 
 # 🚀 DriftSpace
 
 ### A polished arcade space shooter built with **React**, **HTML5 Canvas**, and **Supabase**.
 
-Destroy asteroid fields, chain combos, survive increasingly difficult waves, and compete with players around the world on a real-time global leaderboard.
+Destroy asteroid fields, chain massive combos, survive increasingly difficult waves, and climb the global leaderboard in a modern browser-based arcade experience.
 
-### 🎮 Live Demo
-## https://drift-space.vercel.app/
+<br>
 
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?logo=javascript&logoColor=black)
-![Canvas](https://img.shields.io/badge/HTML5-Canvas-E34F26?logo=html5&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?logo=supabase&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-Build-646CFF?logo=vite&logoColor=white)
+### 🎮 Play Live
+
+# **https://drift-space.vercel.app/**
+
+<br>
+
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![HTML5 Canvas](https://img.shields.io/badge/HTML5-Canvas-E34F26?style=for-the-badge&logo=html5&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-Build-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 
 </div>
 
@@ -23,58 +28,64 @@ Destroy asteroid fields, chain combos, survive increasingly difficult waves, and
 
 # ✨ Overview
 
-DriftSpace is a modern browser-based arcade shooter inspired by the simplicity of classic space games while embracing modern presentation and polish.
+DriftSpace is a modern browser-based arcade space shooter inspired by the timeless simplicity of classic arcade games while embracing modern presentation, polished animations, and responsive gameplay.
 
-Instead of a static title screen and basic gameplay loop, DriftSpace focuses on creating a cohesive experience—from the moment the menu loads until the final score is submitted.
+Rather than relying on a static menu and minimal visual feedback, DriftSpace creates a complete experience from the moment the application loads. A living title screen, seamless gameplay transitions, satisfying combat feedback, and a real-time global leaderboard work together to make every run feel engaging.
 
-Every visual element shares the same design language, every transition is animated, and every gameplay interaction is designed to provide satisfying feedback.
-
----
-
-# 🎥 Gameplay
-
-> *(Replace these with your own screenshots or GIFs.)*
-
-| Living Menu | Gameplay |
-|------------|-----------|
-| ![](screenshots/menu.png) | ![](screenshots/gameplay.png) |
-
-| Leaderboard | Death Screen |
-|-------------|--------------|
-| ![](screenshots/leaderboard.png) | ![](screenshots/death.png) |
+The project was built with a strong emphasis on clean architecture, reusable rendering systems, and consistent visual identity, making it both an enjoyable game and a showcase of modern frontend engineering.
 
 ---
 
-# 🚀 Features
+# 🌟 Highlights
+
+- 🚀 Living animated title screen
+- 🎯 Endless arcade gameplay
+- 💥 Combo chain bonus system
+- 🌊 Dynamic wave progression
+- 🛸 Three-life system
+- ✨ Floating score popups
+- 💥 Explosion polish & debris effects
+- 🏆 Global leaderboard powered by Supabase
+- 🎵 Persistent audio system
+- 🎨 Shared rendering architecture
+- ⚡ Optimized HTML5 Canvas rendering
+- 🕹 Modern pixel arcade aesthetic
+
+---
+
+# 🎮 Core Features
 
 ## 🌌 Living Title Screen
 
-Unlike traditional menus, DriftSpace begins before the player even presses **Launch**.
-
-- Autonomous AI-piloted ship
-- Camera drift
-- Animated asteroid field
-- Real global pilot ticker
-- Dynamic background simulation
-- Seamless warp transition into gameplay
-
----
-
-## 🎮 Arcade Gameplay
-
-Survive endless asteroid waves while maximizing your score.
+Unlike traditional static menus, DriftSpace begins before the player even presses **Launch**.
 
 Features include:
 
-- 🚀 Three-life system
-- 🌊 Endless wave progression
-- 🎯 Dynamic difficulty scaling
-- 💥 Floating score popups
-- ⚡ Combo chain bonuses
-- ✨ Impact flashes
-- 🪨 Debris shard effects
-- ⏸ Pause system
-- ☠ Game over screen
+- Autonomous AI-piloted spacecraft
+- Dynamic camera drift
+- Animated asteroid field
+- Real-time global pilot ticker
+- Shared gameplay renderer
+- Smooth warp transition into gameplay
+
+---
+
+## 🚀 Arcade Gameplay
+
+Pilot your ship through increasingly dangerous asteroid fields while chasing the highest possible score.
+
+Gameplay includes:
+
+- Endless wave progression
+- Dynamic difficulty scaling
+- Three-life system
+- Combo chain bonuses
+- Floating score feedback
+- Impact flash effects
+- Debris shard particles
+- Wave announcements
+- Pause & resume support
+- Game over summary screen
 
 ---
 
@@ -82,43 +93,60 @@ Features include:
 
 Compete against players around the world.
 
+Features include:
+
 - Live Supabase leaderboard
 - Personal best tracking
 - Duplicate score prevention
-- Highlighted player runs
-- Global pilot rankings
+- Highlighted current player
+- Animated leaderboard interface
 
 ---
 
-## 🔊 Audio
+## 🔊 Audio System
 
-Centralized audio management powers every game state.
+A centralized audio architecture powers every game state.
 
 - Persistent mute preference
 - Shared Audio Manager
-- Menu music
-- Gameplay music
-- Combo audio cues
+- Menu & gameplay music
+- Combo sound effects
 - Smooth music transitions
 
 ---
 
 ## 🎨 Consistent Visual Identity
 
-Every major visual element shares the same source of truth.
+Every major visual element is built around a single source of truth.
+
+Shared assets include:
 
 - Ship geometry
 - Asteroid renderer
-- HUD icons
 - Brand emblem
-- Logo
-- Gameplay renderer
+- HUD icons
+- Gameplay rendering
+- Menu rendering
 
-This keeps every screen visually consistent while reducing duplicated rendering logic.
+This approach ensures complete visual consistency while minimizing duplicated rendering logic.
 
 ---
 
-# 🏗 Architecture
+# 🖼 Screenshots
+
+> Replace these placeholders with actual screenshots from your project.
+
+| Living Menu | Gameplay |
+|--------------|-----------|
+| ![](screenshots/menu.png) | ![](screenshots/gameplay.png) |
+
+| Leaderboard | Death Screen |
+|--------------|--------------|
+| ![](screenshots/leaderboard.png) | ![](screenshots/death.png) |
+
+---
+
+# 🏗 Project Architecture
 
 ```
 src
@@ -129,7 +157,8 @@ src
 │   ├── Leaderboard
 │   ├── DeathScreen
 │   ├── PauseScreen
-│   └── AudioToggle
+│   ├── AudioToggle
+│   └── ScorePopup
 │
 ├── game
 │   ├── entities
@@ -144,90 +173,67 @@ src
 │
 ├── utils
 │
-└── assets
+├── assets
+│
+└── styles
 ```
 
 ---
 
-# ⚙ Tech Stack
+# ⚙️ Tech Stack
 
 | Technology | Purpose |
 |------------|---------|
-| React | UI |
-| HTML5 Canvas | Rendering |
-| JavaScript | Game Logic |
-| Vite | Development & Build |
-| Supabase | Global Leaderboard |
+| React | User Interface |
+| HTML5 Canvas | Game Rendering |
+| JavaScript (ES6+) | Gameplay Logic |
 | CSS Modules | Styling |
-
----
-
-# 🎯 Gameplay Highlights
-
-### Living Menu
-
-The menu is rendered using the same systems as gameplay, creating a continuous world rather than a static screen.
-
----
-
-### Shared Rendering
-
-Ship geometry and asteroid rendering are defined once and reused across:
-
-- Gameplay
-- HUD
-- Menu
-- Branding
-- Logo
-
----
-
-### Modern Arcade Feedback
-
-Every action provides visual feedback.
-
-- Floating scores
-- Combo bonuses
-- Screen polish
-- Wave announcements
-- Animated life indicators
-- Explosion effects
+| Vite | Build Tool |
+| Supabase | Global Leaderboard & Backend |
 
 ---
 
 # ⚡ Performance
 
-Designed with performance in mind.
+DriftSpace is designed with performance as a priority.
 
 - RequestAnimationFrame game loop
 - Shared rendering pipeline
-- No unnecessary per-frame allocations
-- Reduced-motion accessibility support
-- Efficient particle systems
+- Minimal runtime allocations
+- Efficient particle system
+- Reusable geometry rendering
+- Accessibility support for reduced motion
+- Smooth animations across game states
 
 ---
 
 # 🚀 Getting Started
 
-Clone the repository
+Clone the repository.
 
 ```bash
 git clone https://github.com/ananya24s/DriftSpace.git
 ```
 
-Install dependencies
+Navigate into the project.
+
+```bash
+cd DriftSpace
+```
+
+Install dependencies.
 
 ```bash
 npm install
 ```
 
-Run locally
+Run the development server.
 
 ```bash
 npm run dev
 ```
 
-Build for production
+Build for production.
 
 ```bash
 npm run build
@@ -235,32 +241,34 @@ npm run build
 
 ---
 
-# 🛣 Future Plans
+# 🔮 Future Improvements
 
-- 👾 Enemy ships
-- 🛰 New asteroid behaviors
+While the core experience is complete, planned gameplay expansions include:
+
+- 👾 Enemy spacecraft
+- 🛰 Additional asteroid behaviors
 - ⚔ Boss encounters
 - ⚡ Power-ups
-- 🌌 Additional game modes
+- 🌌 New gameplay modes
+- 📈 Expanded player statistics
 
 ---
 
 # 👩‍💻 Author
 
-**Ananya Singh**
+## Ananya Singh
 
 Computer Science Undergraduate
 
-GitHub: https://github.com/ananya24s
-
-LinkedIn: https://www.linkedin.com/in/ananya-singh-94496b343/
+- GitHub: https://github.com/ananya24s
+- Live Demo: https://drift-space.vercel.app/
 
 ---
 
 <div align="center">
 
-### ⭐ If you enjoyed DriftSpace, consider giving the repository a star!
+### ⭐ If you enjoyed DriftSpace, consider starring the repository!
 
-Made with ☕, React, Canvas, and a love for arcade games.
+Thank you for checking out DriftSpace.
 
 </div>
