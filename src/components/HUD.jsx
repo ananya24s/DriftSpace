@@ -169,7 +169,11 @@ export function HUD({ score, lives, wave }) {
 const styles = {
   hud: {
     position: 'absolute', top: 0, left: 0, width: '100%',
-    padding: '20px 24px',
+    // Safe-area insets ensure HUD clears iPhone notch in landscape
+    paddingTop:   'max(env(safe-area-inset-top,    0px) + 12px, 20px)',
+    paddingLeft:  'max(env(safe-area-inset-left,   0px) + 16px, 24px)',
+    paddingRight: 'max(env(safe-area-inset-right,  0px) + 16px, 24px)',
+    paddingBottom: 12,
     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
     pointerEvents: 'none',
     fontFamily: FONT_MONO, boxSizing: 'border-box',

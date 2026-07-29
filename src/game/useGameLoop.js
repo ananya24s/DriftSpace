@@ -278,5 +278,15 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
     return () => cancelAnimationFrame(rafRef.current);
   }, [gameState]);
 
-  return { initState, stateRef };
+  // setVirtualKey — lets mobile controls write into the same keysRef
+  // that keyboard input uses. One shared input state, no duplicate logic.
+  const setVirtualKey = (key, pressed) => {
+    if (pressed) {
+      keysRef.current[key] = true;
+    } else {
+      delete keysRef.current[key];
+    }
+  };
+
+  return { initState, stateRef, setVirtualKey };
 }

@@ -1,0 +1,34 @@
+/*
+  mobile.css — imported once in main.jsx/App.jsx.
+  Handles two things:
+  1. Shows MobileControls only on coarse-touch devices
+  2. Prevents browser touch gestures during gameplay
+*/
+
+/* Show virtual controls only on real touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .ds-mobile-controls {
+    display: block !important;
+  }
+}
+
+/* Prevent pull-to-refresh, pinch-zoom, and scroll during gameplay */
+.ds-game-active {
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Safe area meta — ensures controls clear notch/home bar */
+html {
+  /* Let iOS honour safe-area-inset-* env() variables */
+  height: -webkit-fill-available;
+}
+
+/* Show portrait overlay only on touch devices in portrait */
+@media (hover: none) and (pointer: coarse) {
+  .ds-portrait-overlay {
+    display: flex !important;
+  }
+}

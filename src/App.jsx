@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { HUD } from './components/HUD';
 import { Menu, PauseScreen } from './components/Menu';
@@ -6,6 +6,9 @@ import { Leaderboard } from './components/Leaderboard';
 import { ScoreSubmissionModal } from './components/ScoreSubmissionModal';
 import { DeathScreen } from './components/DeathScreen';
 import { AudioToggle } from './components/AudioToggle';
+import { MobileControls } from './components/MobileControls';
+import { PortraitOverlay } from './components/PortraitOverlay';
+import './mobile.css';
 import { useHighScores } from './hooks/useHighScores';
 import audioManager from "./assets/audio/AudioManager";
 export default function App() {
@@ -17,6 +20,16 @@ export default function App() {
   const [showSubmit, setShowSubmit] = useState(false);
   const [submittedName, setSubmittedName] = useState(null);
   const { scores, saveScore } = useHighScores();
+  // useRef — not useState — because useState's setter treats a function
+  // argument as an updater: setFn(() => fn) calls fn() rather than storing fn.
+  const virtualKeyRef = useRef(null);
+  const setVirtualKey = useCallback((key, pressed) => {
+    if (virtualKeyRef.current) virtualKeyRef.current(key, pressed);
+  }, []);
+
+  const handleCanvasReady = useCallback(({ setVirtualKey: fn }) => {
+    virtualKeyRef.current = fn;
+  }, []);
 
   const startGame = useCallback(() => {
     setScore(0); setLives(3); setWave(1);
@@ -73,7 +86,10 @@ useEffect(() => {
   }
 }, [gameState]);
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#000' }}>
+    <div
+      className={gameState === 'playing' ? 'ds-game-active' : ''}
+      style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#000' }}
+    >
 
       <GameCanvas
         gameState={gameState}
@@ -81,6 +97,7 @@ useEffect(() => {
         onScoreUpdate={setScore}
         onLivesUpdate={setLives}
         onWaveUpdate={setWave}
+        onReady={handleCanvasReady}
       />
 
       {(gameState === 'playing' || gameState === 'paused') && (
@@ -146,6 +163,16 @@ useEffect(() => {
           onMenu={() => { audioManager.playClick(); setGameState('menu'); }}
         />
       )}
+
+      {/* Mobile virtual controls — only visible on touch devices via CSS,
+          only active during gameplay */}
+      <MobileControls
+        setVirtualKey={setVirtualKey}
+        active={gameState === 'playing'}
+      />
+
+      {/* Portrait orientation warning — touch devices only via CSS */}
+      <PortraitOverlay />
 
     </div>
   );
