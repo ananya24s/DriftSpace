@@ -132,19 +132,6 @@ This approach ensures complete visual consistency while minimizing duplicated re
 
 ---
 
-# 🖼 Screenshots
-
-> Replace these placeholders with actual screenshots from your project.
-
-| Living Menu | Gameplay |
-|--------------|-----------|
-| ![](screenshots/menu.png) | ![](screenshots/gameplay.png) |
-
-| Leaderboard | Death Screen |
-|--------------|--------------|
-| ![](screenshots/leaderboard.png) | ![](screenshots/death.png) |
-
----
 
 # 🏗 Project Architecture
 
