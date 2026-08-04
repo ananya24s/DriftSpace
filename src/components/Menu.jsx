@@ -683,7 +683,8 @@ export function Menu({ onStart, onLeaderboard }) {
         >
           <DriftSpaceLogo
             height={130}
-            style={{ width: 'clamp(360px, 96vw, 1280px)', height: 'auto', cursor: 'default' }}
+            style={{width: '100%', maxWidth: '1060px',height: 'auto',display: 'block',cursor: 'default',}}
+            // style={{ width: 'clamp(360px, 96vw, 1280px)', height: 'auto', cursor: 'default' }}
             markFlaring={markFlaring}
             markBobbing={markBobbing}
           />
