@@ -16,12 +16,12 @@ function ordinal(n) {
 /* Standings table: place, pilot, score, status */
 function Standings({ rows, live }) {
   return (
-    <div style={styles.table}>
+    <div className="ds-vs-table" style={styles.table}>
       {rows.map((p, i) => {
         const place = live ? null : p.place;
         const winner = !live && p.place === 1;
         return (
-          <div key={p.id} style={{
+          <div key={p.id} className="ds-vs-row" style={{
             ...styles.row,
             borderColor: p.isMe ? `${CYAN}55` : 'rgba(255,255,255,0.06)',
             background: winner ? `${p.color}12` : 'transparent',
@@ -63,9 +63,9 @@ export function VersusResult({ versus, onMenu }) {
     return (
       <div style={st.overlay}>
         <VsStyle />
-        <div style={st.panel}>
-          <div style={st.title}>NEXT ROUND</div>
-          <div style={st.divider} />
+        <div className="ds-vs-panel" style={st.panel}>
+          <div className="ds-vs-title" style={st.title}>NEXT ROUND</div>
+          <div className="ds-vs-divider" style={st.divider} />
           <PilotSlots pilots={players} myId={myId} />
           <div key={count} style={{
             ...st.countNum,
@@ -87,12 +87,12 @@ export function VersusResult({ versus, onMenu }) {
     return (
       <div style={st.overlay}>
         <VsStyle />
-        <div style={st.panel}>
-          <div style={{ ...styles.headline, color: RED, textShadow: `0 0 26px ${RED}aa` }}>ELIMINATED</div>
+        <div className="ds-vs-panel" style={st.panel}>
+          <div className="ds-vs-title" style={{ ...styles.headline, color: RED, textShadow: `0 0 26px ${RED}aa` }}>ELIMINATED</div>
           <div style={st.hint}>
             YOU FINISHED {ordinal(me?.rank ?? players.length)} · {flying} PILOT{flying === 1 ? '' : 'S'} STILL FLYING
           </div>
-          <div style={st.divider} />
+          <div className="ds-vs-divider" style={st.divider} />
           <div style={{ ...st.label, animation: 'vs-blink 1s steps(1) infinite' }}>● LIVE</div>
           <Standings rows={live} live />
           <div style={st.btnCol}>
@@ -115,12 +115,12 @@ export function VersusResult({ versus, onMenu }) {
   return (
     <div style={st.overlay}>
       <VsStyle />
-      <div style={st.panel}>
-        <div style={{ ...styles.headline, color, textShadow: `0 0 26px ${color}aa` }}>{headline}</div>
+      <div className="ds-vs-panel" style={st.panel}>
+        <div className="ds-vs-title" style={{ ...styles.headline, color, textShadow: `0 0 26px ${color}aa` }}>{headline}</div>
         <div style={st.hint}>
           {won ? 'LAST PILOT FLYING' : `${champ.name} WAS THE LAST PILOT FLYING`}
         </div>
-        <div style={st.divider} />
+        <div className="ds-vs-divider" style={st.divider} />
 
         <Standings rows={result.ranking} />
 
@@ -138,7 +138,7 @@ export function VersusResult({ versus, onMenu }) {
           )}
           <VsButton onClick={leave}>LEAVE ROOM</VsButton>
         </div>
-        <div style={st.hint}>VERSUS SCORES DON&apos;T GO ON THE LEADERBOARD</div>
+        <div className="ds-short-hide" style={st.hint}>VERSUS SCORES DON&apos;T GO ON THE LEADERBOARD</div>
       </div>
     </div>
   );

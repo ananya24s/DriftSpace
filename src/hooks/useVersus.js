@@ -33,6 +33,10 @@ const START_RESEND_MS    = 400;  // 'start' is sent twice in case one is lost
 // (phone locked, Wi-Fi drop), so everyone pings; silence mid-match = gone.
 const HEARTBEAT_MS       = 2000;
 const SILENCE_TIMEOUT_MS = 8000;
+// Phones suspend background pages (e.g. the host switching to WhatsApp to
+// share the code), which drops them from presence. In the lobby we wait this
+// long for them to come back before calling the room closed.
+const HOST_GRACE_MS      = 20000;
 
 const ACTIVE_PHASES = ['countdown', 'playing', 'spectating'];
 
@@ -229,7 +233,8 @@ export function useVersus(callbacks = {}) {
     setError(message);
   }, [resetAll]);
 
-  const handleGone = useCallback(id => {
+  // intentional: they pressed LEAVE / closed the tab ('bye'), vs. just vanished
+  const handleGone = useCallback((id, intentional = false) => {
     if (id === myIdRef.current || goneIdsRef.current.has(id)) return;
     goneIdsRef.current.add(id);
     delete lastHeardRef.current[id];
@@ -247,9 +252,12 @@ export function useVersus(callbacks = {}) {
     if (id === hostIdRef.current) {
       hostIdRef.current = null;
       setHostPresent(false);
-      if (phaseRef.current === 'lobby' || phaseRef.current === 'connecting') fail('HOST LEFT THE ROOM');
+      if (phaseRef.current === 'lobby' || phaseRef.current === 'connecting') {
+        if (intentional) fail('HOST LEFT THE ROOM');
+        else later(() => { if (!hostIdRef.current && phaseRef.current === 'lobby') fail('HOST LEFT THE ROOM'); }, HOST_GRACE_MS);
+      }
     }
-  }, [eliminate, fail, publishPlayers]);
+  }, [eliminate, fail, later, publishPlayers]);
 
   // ---- Incoming messages ----
 
@@ -290,7 +298,7 @@ export function useVersus(callbacks = {}) {
         }
         break;
       case 'bye':
-        handleGone(from);
+        handleGone(from, true);
         break;
       default:
         break;
@@ -300,6 +308,11 @@ export function useVersus(callbacks = {}) {
   // ---- Presence (who is in the room) ----
 
   const handleMembers = useCallback((list, meId) => {
+    // Between matches, a pilot who dropped out (phone went to background)
+    // and reconnected is welcome back. Mid-match they stay out.
+    if (!ACTIVE_PHASES.includes(phaseRef.current)) {
+      list.forEach(m => goneIdsRef.current.delete(m.id));
+    }
     const present = list.filter(m => !goneIdsRef.current.has(m.id));
     // Only a newcomer decides the room is full — pilots already inside are
     // never bumped (join times come from each device's clock, which can be off)
@@ -362,7 +375,9 @@ export function useVersus(callbacks = {}) {
           members: handleMembers,
           message: handleMessage,
           status: s => {
-            if (s === 'error') { fail("CAN'T REACH SERVER"); return; }
+            // After the first connect, errors are transient (phone waking up);
+            // the realtime client rejoins by itself and we re-announce ourselves
+            if (s === 'error') { if (!connected) fail("CAN'T REACH SERVER"); return; }
             connected = true;
             if (asRole === 'host' && phaseRef.current === 'connecting') setPhase('lobby');
           },

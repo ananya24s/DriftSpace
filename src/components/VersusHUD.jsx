@@ -2,6 +2,11 @@ const FONT_PIXEL  = "'Press Start 2P', monospace";
 const FONT_MONO   = "'JetBrains Mono', 'Courier New', monospace";
 const SHIP_POINTS = '10.00,1.00 19.00,19.00 10.00,16.23 1.00,19.00';
 
+// On phones the chips must fit between the joystick and the fire button,
+// so they drop the ship icons for a compact "×3" lives count.
+const IS_TOUCH = typeof window !== 'undefined'
+  && window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
+
 /* Rival status bar (bottom centre) + "INCOMING" warning when someone sends
    asteroids your way. Shown only during a versus match. */
 export function VersusHUD({ rivals, incoming }) {
@@ -33,17 +38,20 @@ export function VersusHUD({ rivals, incoming }) {
         {rivals.map(r => (
           <div key={r.id} style={{
             ...styles.chip,
+            ...(IS_TOUCH ? styles.chipCompact : null),
             borderColor: `${r.color}${r.alive ? '66' : '22'}`,
             opacity: r.alive ? 1 : 0.45,
           }}>
             <span style={{
-              ...styles.name, color: r.color, textShadow: r.alive ? `0 0 8px ${r.color}99` : 'none',
+              ...styles.name, ...(IS_TOUCH ? styles.nameCompact : null), color: r.color, textShadow: r.alive ? `0 0 8px ${r.color}99` : 'none',
               textDecoration: r.alive ? 'none' : 'line-through',
             }}>
               {r.name || 'RIVAL'}
             </span>
             <span style={styles.score}>{r.score.toLocaleString()}</span>
-            {r.alive ? (
+            {r.alive && IS_TOUCH ? (
+              <span style={{ ...styles.out, color: r.color }}>×{r.lives}</span>
+            ) : r.alive ? (
               <span style={styles.lives}>
                 {Array.from({ length: Math.max(3, r.lives) }, (_, i) => (
                   <svg key={i} width={8} height={8} viewBox="0 0 20 20" style={{ display: 'block' }}>
@@ -68,7 +76,9 @@ const styles = {
     position: 'absolute', left: '50%', transform: 'translateX(-50%)',
     bottom: 'max(env(safe-area-inset-bottom, 0px) + 14px, 18px)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-    flexWrap: 'wrap', maxWidth: 'calc(100vw - 32px)',
+    flexWrap: 'wrap',
+    // Phones: stay clear of the joystick (left) and fire button (right)
+    maxWidth: IS_TOUCH ? 'calc(100vw - 290px)' : 'calc(100vw - 32px)',
     pointerEvents: 'none', zIndex: 4,
   },
   chip: {
@@ -76,6 +86,8 @@ const styles = {
     padding: '6px 10px', whiteSpace: 'nowrap',
     border: '1px solid', background: 'rgba(0,0,0,0.6)',
   },
+  chipCompact: { gap: 6, padding: '5px 7px' },
+  nameCompact: { fontSize: 7, maxWidth: 48 },
   name: {
     fontFamily: FONT_PIXEL, fontSize: 8, letterSpacing: 1,
     maxWidth: 84, overflow: 'hidden', textOverflow: 'ellipsis',

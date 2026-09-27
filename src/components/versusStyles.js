@@ -27,7 +27,7 @@ export const st = {
   label: { fontSize: 9, letterSpacing: 4, color: 'rgba(0,229,255,0.5)', alignSelf: 'flex-start' },
   input: {
     background: 'transparent', border: '1px solid rgba(0,229,255,0.35)', color: CYAN,
-    fontFamily: FONT_PIXEL, fontSize: 15, letterSpacing: 5, textAlign: 'center',
+    fontFamily: FONT_PIXEL, fontSize: 16, letterSpacing: 4, textAlign: 'center',
     padding: '12px 14px', width: '100%', outline: 'none', boxSizing: 'border-box',
   },
   btnCol: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%', marginTop: 4 },

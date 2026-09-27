@@ -41,13 +41,14 @@ export function ScoreSubmissionModal({ score, onDone }) {
   const handleKey = e => { if (e.key === 'Enter') handleSubmit(); };
 
   return (
-    <div style={st.overlay}>
+    <div className="ds-short-screen" style={st.overlay}>
       <GlobalStyle />
-      <div style={st.panel}>
+      <div className="ds-short-panel" style={st.panel}>
 
         {/* Emblem + Signal Lost */}
         <div style={st.header}>
           <DriftSpaceMark
+            className="ds-short-hide"
             size={44}
             fill="rgba(255,255,255,0.1)"
             stroke="rgba(255,68,68,0.65)"

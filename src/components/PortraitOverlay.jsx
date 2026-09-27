@@ -9,7 +9,7 @@ const FONT_MONO  = "'JetBrains Mono', 'Courier New', monospace";
   older iOS Safari. Disappears automatically on rotate to landscape.
   Not rendered at all on desktop (same media query as MobileControls).
 */
-export function PortraitOverlay() {
+export function PortraitOverlay({ enabled = true }) {
   const [isPortrait, setIsPortrait] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerHeight > window.innerWidth;
@@ -34,7 +34,7 @@ export function PortraitOverlay() {
 
   // Only visible on touch devices (media query in mobile.css)
   // and only when portrait
-  if (!isPortrait) return null;
+  if (!isPortrait || !enabled) return null;
 
   return (
     <div className="ds-portrait-overlay" style={st.overlay}>

@@ -74,17 +74,18 @@ export function DeathScreen({ score, scores, onRetry, onMenu }) {
   }, []);
 
   return (
-    <div style={st.screen}>
+    <div className="ds-short-screen" style={st.screen}>
       <GlobalStyle />
 
       {/* Emblem + destroyed title */}
-      <div style={{
+      <div className="ds-short-tight" style={{
         ...st.header,
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(-12px)',
         transition: 'opacity 0.5s ease, transform 0.5s ease',
       }}>
         <DriftSpaceMark
+          className="ds-short-hide"
           size={52}
           fill="rgba(255,255,255,0.12)"
           stroke="rgba(255,68,68,0.7)"
@@ -95,7 +96,7 @@ export function DeathScreen({ score, scores, onRetry, onMenu }) {
       </div>
 
       {/* Score */}
-      <div style={{
+      <div className="ds-short-tight" style={{
         ...st.scoreBlock,
         opacity: scoreVisible ? 1 : 0,
         transform: scoreVisible ? 'scale(1)' : 'scale(0.88)',
@@ -109,7 +110,7 @@ export function DeathScreen({ score, scores, onRetry, onMenu }) {
       </div>
 
       {/* Local high scores */}
-      <div style={{
+      <div className="ds-short-tight" style={{
         ...st.tableWrap,
         opacity: visible ? 1 : 0,
         transition: 'opacity 0.5s ease 0.3s',

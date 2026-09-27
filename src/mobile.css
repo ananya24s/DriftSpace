@@ -42,3 +42,67 @@ html {
     bottom: auto !important;
   }
 }
+
+/* Touch devices: keyboard hints (W / S / SPACE…) don't apply, and they
+   would sit on top of the pilots ticker on short phone screens */
+@media (hover: none) and (pointer: coarse) {
+  .ds-keys-hint {
+    display: none !important;
+  }
+}
+
+/* Short screens (phones in landscape): game-over screens drop the emblem,
+   tighten spacing and scroll, so every button — and the name field when
+   the keyboard is open — stays reachable */
+.ds-short-screen {
+  overflow-y: auto;
+}
+@media (max-height: 520px) {
+  .ds-short-screen {
+    justify-content: flex-start !important;
+    padding: 14px 0 !important;
+    box-sizing: border-box;
+  }
+  .ds-short-panel {
+    margin: auto 0;
+    padding: 18px 32px !important;
+  }
+  .ds-short-hide {
+    display: none !important;
+  }
+  .ds-short-tight {
+    margin-bottom: 12px !important;
+  }
+}
+
+/* Versus panels on short screens (phones in landscape): tighter spacing,
+   smaller headline and a 2x2 pilot grid so START / PLAY AGAIN fit on screen */
+@media (max-height: 520px) {
+  .ds-vs-panel {
+    gap: 8px !important;
+    padding: 12px 22px !important;
+    width: min(560px, 100%) !important;
+  }
+  .ds-vs-title {
+    font-size: 16px !important;
+  }
+  .ds-vs-divider {
+    margin: 0 !important;
+  }
+  .ds-vs-slots,
+  .ds-vs-table {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px !important;
+  }
+  .ds-vs-row {
+    padding: 6px 10px !important;
+  }
+  .ds-vs-btn {
+    padding: 10px 20px 8px !important;
+  }
+  .ds-vs-code {
+    padding: 8px 16px 6px !important;
+    font-size: 16px !important;
+  }
+}

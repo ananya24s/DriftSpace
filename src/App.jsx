@@ -145,7 +145,8 @@ useEffect(() => {
       />
 
       {(gameState === 'playing' || gameState === 'paused') && (
-        <HUD score={score} lives={lives} wave={wave} powerUps={powerUps} />
+        <HUD score={score} lives={lives} wave={wave} powerUps={powerUps}
+          onPause={mode === 'solo' ? () => { audioManager.playClick(); setGameState('paused'); } : undefined} />
       )}
 
       {mode === 'versus' && gameState === 'playing' && (
@@ -233,7 +234,9 @@ useEffect(() => {
       />
 
       {/* Portrait orientation warning — touch devices only via CSS */}
-      <PortraitOverlay />
+      {/* Versus lobby/result screens work in portrait (easier typing on a phone);
+          everything else asks for landscape */}
+      <PortraitOverlay enabled={gameState !== 'versus' && gameState !== 'versus-result'} />
 
     </div>
   );

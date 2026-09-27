@@ -137,7 +137,8 @@ export function MobileControls({ setVirtualKey, active }) {
     };
   }, [releaseJoystick, releaseFire]);
 
-  if (!setVirtualKey) return null;
+  // Only shown during gameplay — on menus they'd just cover the screen
+  if (!setVirtualKey || !active) return null;
 
   return (
     <div className="ds-mobile-controls" style={st.wrapper}>

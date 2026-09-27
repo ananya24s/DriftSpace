@@ -6,7 +6,7 @@
 
 ### A polished arcade space shooter built with **React**, **HTML5 Canvas**, and **Supabase**.
 
-Destroy asteroid fields, grab retro power-ups, chain massive combos, survive increasingly difficult waves, and climb the global leaderboard in a modern browser-based arcade experience.
+Destroy asteroid fields, grab retro power-ups, chain massive combos, survive increasingly difficult waves, battle up to 3 friends in online Versus, and climb the global leaderboard, on desktop or your phone.
 
 <br>
 
@@ -44,6 +44,8 @@ The project was built with a strong emphasis on clean architecture, reusable ren
 - 🌊 Dynamic wave progression
 - ⚡ 7 collectible 8-bit power-ups
 - ❤️ Extra lives (up to 5)
+- ⚔️ Online Versus for 2–4 pilots with room codes
+- 📱 Fully playable on phones
 - ✨ Floating score popups
 - 💥 Explosion polish & debris effects
 - 🏆 Global leaderboard powered by Supabase
@@ -87,7 +89,7 @@ Gameplay includes:
 - Impact flash effects
 - Debris shard particles
 - Wave announcements
-- Pause & resume support
+- Pause & resume support (keyboard or on-screen button)
 - Game over summary screen
 
 ---
@@ -112,6 +114,30 @@ New players can open the **Power-Ups** guide from the title screen to see what e
 
 ---
 
+## ⚔️ Versus Multiplayer
+
+Play live against 1–3 friends. Everyone flies their own ship in their own asteroid field, and you fight by sending asteroids at each other. The last pilot flying wins.
+
+**How a match works**
+
+1. **Host:** click **VERSUS** on the title screen, enter a pilot name and choose **HOST ROOM**. You get a code like `DRIFT-7K2`. Tap it to copy it, or on a phone use **SHARE CODE**.
+2. **Join:** friends choose **JOIN ROOM** and type the code. Each pilot gets a slot and a colour in the lobby.
+3. **Start:** once 2 or more pilots are in, the host presses **START**. Everyone gets the same 3-2-1 countdown.
+4. **Fight:** your chain combos (and Nova Bombs) send asteroids to whoever is leading. They arrive in your colour with an **INCOMING** warning, so your rivals know who hit them.
+5. **Survive:** run out of lives and you're out. You can watch the live standings until the round ends.
+6. **Results:** everyone is ranked 1st to 4th, and the host can start the next round with **PLAY AGAIN**.
+
+**Good to know**
+
+- The bottom of the screen shows every rival's name, score and lives.
+- A pilot who joins mid-round waits in the lobby and joins the next round.
+- A pilot who disconnects is counted as out, and the match carries on.
+- Pause is off in Versus, since the match is live for everyone.
+- Versus scores never go on the global leaderboard.
+- It runs on Supabase Realtime (Broadcast + Presence), so there's no game server and nothing is stored in the database.
+
+---
+
 ## 🕹 Controls
 
 | Key | Action |
@@ -120,10 +146,21 @@ New players can open the **Power-Ups** guide from the title screen to see what e
 | `S` / `↓` | Reverse thrust |
 | `A` `D` / `←` `→` | Turn |
 | `Space` / `Z` | Fire |
-| `P` | Pause |
+| `P` | Pause (solo) |
 | `R` | Retry |
 
-On touch devices, a virtual joystick and fire button appear automatically (landscape mode).
+---
+
+## 📱 Playing on a Phone
+
+Every mode works on touch devices:
+
+- **Controls:** a virtual joystick (steer and thrust) and a fire button appear during gameplay.
+- **Pause:** in solo games, use the on-screen pause button under your score.
+- **Orientation:** gameplay is played in landscape. The Versus lobby and results also work in portrait, which makes typing names and codes easier.
+- **Sharing a room code:** use **SHARE CODE** to send it through the phone's share sheet (WhatsApp, Messages…) without leaving the game.
+- **Switching apps briefly:** a pilot who switches apps in the lobby reconnects automatically when they come back. If the host drops out, the room waits 20 seconds for them.
+- **Screen size:** all menus, the HUD, and the Versus screens adapt to short landscape screens.
 
 ---
 
@@ -138,6 +175,7 @@ Features include:
 - Duplicate score prevention
 - Highlighted current player
 - Animated leaderboard interface
+- Solo runs only (Versus scores are kept off it)
 
 ---
 
@@ -149,7 +187,7 @@ A centralized audio architecture powers every game state.
 - Shared Audio Manager
 - Menu & gameplay music
 - Combo sound effects
-- Synthesized chiptune power-up jingles (Web Audio API)
+- Synthesized chiptune power-up jingles and Versus countdown beeps (Web Audio API)
 - Smooth music transitions
 
 ---
@@ -184,6 +222,10 @@ src
 │   ├── GameCanvas.jsx        # Canvas host for the game loop
 │   ├── HUD.jsx               # Score, lives, wave, active power-ups
 │   ├── PixelIcon.jsx         # 8-bit power-up sprite (SVG)
+│   ├── VersusLobby.jsx       # Host / join, pilot slots, countdown
+│   ├── VersusHUD.jsx         # In-game rival chips & INCOMING warning
+│   ├── VersusResult.jsx      # Spectating, rankings, play again
+│   ├── versusStyles.js       # Shared styles for the versus screens
 │   ├── Leaderboard.jsx
 │   ├── ScoreSubmissionModal.jsx
 │   ├── DeathScreen.jsx
@@ -208,9 +250,16 @@ src
 ├── assets
 │   └── audio                 # AudioManager, music & SFX
 │
-├── hooks                     # High scores & leaderboard
+├── hooks
+│   ├── useHighScores.js
+│   ├── useLeaderboard.js
+│   └── useVersus.js          # Versus rooms, matches, attacks, rankings
 │
-└── services                  # Supabase client
+├── services
+│   ├── supabase.js           # Supabase client & leaderboard queries
+│   └── versus.js             # Realtime room channel (Broadcast + Presence)
+│
+└── mobile.css                # Touch & short-screen layout rules
 ```
 
 ---
@@ -226,7 +275,8 @@ src
 | Framer Motion | UI Animation |
 | Web Audio API | Chiptune Sound Effects |
 | Vite | Build Tool |
-| Supabase | Global Leaderboard & Backend |
+| Supabase | Global Leaderboard |
+| Supabase Realtime | Versus Multiplayer (Broadcast + Presence) |
 
 ---
 
@@ -264,6 +314,13 @@ Install dependencies.
 npm install
 ```
 
+Create a `.env` file with your Supabase project details. The same project powers the leaderboard and Versus. Realtime is on by default for new projects.
+
+```
+VITE_SUPABASE_URL=your-project-url
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
 Run the development server.
 
 ```bash
@@ -286,6 +343,7 @@ While the core experience is complete, planned gameplay expansions include:
 - 🛰 Additional asteroid behaviors
 - ⚔ Boss encounters
 - 🌌 New gameplay modes
+- 🏅 Versus win counts & seasons
 - 📈 Expanded player statistics
 
 ---

@@ -197,7 +197,11 @@ function ActivePowerUps({ powerUps }) {
   );
 }
 
-export function HUD({ score, lives, wave, powerUps = [] }) {
+// Phones have no P key, so they get an on-screen pause button (solo only)
+const IS_TOUCH = typeof window !== 'undefined'
+  && window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
+
+export function HUD({ score, lives, wave, powerUps = [], onPause }) {
   const prevLivesRef = useRef(lives);
   const [lostSet, setLostSet] = useState(new Set());
 
@@ -228,6 +232,11 @@ export function HUD({ score, lives, wave, powerUps = [] }) {
         <div>
           <div style={styles.label}>SCORE</div>
           <div style={styles.score}>{score.toLocaleString()}</div>
+          {IS_TOUCH && onPause && (
+            <button style={styles.pauseBtn} onClick={onPause} aria-label="Pause">
+              <span style={styles.pauseBar} /><span style={styles.pauseBar} />
+            </button>
+          )}
         </div>
 
         {/* Lives + Wave — right */}
@@ -269,13 +278,21 @@ const styles = {
     color: '#fff',
     textShadow: '0 0 16px rgba(0,229,255,0.25)',
   },
-  right: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 },
+  // marginRight leaves room for the mute button that sits in the top-right corner
+  right: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, marginRight: 56 },
   livesRow: { display: 'flex', gap: 8, alignItems: 'center' },
   waveRow: { display: 'flex', alignItems: 'center', gap: 8 },
   wave: {
     fontFamily: FONT_PIXEL, fontSize: 11, letterSpacing: 2,
     color: CYAN, textShadow: `0 0 10px rgba(0,229,255,0.5)`,
   },
+  pauseBtn: {
+    pointerEvents: 'auto', marginTop: 10,
+    width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+    background: 'rgba(0,229,255,0.05)', border: '1px solid rgba(0,229,255,0.4)', borderRadius: 2,
+    cursor: 'pointer', padding: 0,
+  },
+  pauseBar: { width: 4, height: 12, background: CYAN, boxShadow: '0 0 6px rgba(0,229,255,0.6)' },
   puWrap: {
     position: 'absolute', left: '50%', transform: 'translateX(-50%)',
     top: 'max(env(safe-area-inset-top, 0px) + 12px, 20px)',

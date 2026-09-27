@@ -765,8 +765,9 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
             color: versusHover && !launching ? '#ff3b3b' : 'rgba(0,229,255,0.6)',
             textShadow: versusHover && !launching ? '0 0 12px rgba(255,59,59,0.6)' : 'none',
           }}>
-            1V1 VERSUS
+            VERSUS
           </span>
+          <span style={styles.versusOr}>2–4P</span>
           <span style={{
             ...styles.versusArrow,
             color: versusHover && !launching ? '#ff3b3b' : 'rgba(0,229,255,0.4)',
@@ -800,7 +801,7 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
       </div>
 
       {/* Controls HUD — fixed bottom-left, outside the centered stack */}
-      <div style={styles.controlsStrip}>
+      <div className="ds-keys-hint" style={styles.controlsStrip}>
         {CONTROLS.map(([key, label], i) => (
           <span key={key} style={styles.controlItem}>
             <span style={styles.controlKeyCap}>{key}</span>
