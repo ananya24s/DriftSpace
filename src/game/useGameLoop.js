@@ -7,11 +7,20 @@ import { PowerUp } from './PowerUp';
 import { POWERUP_TYPES } from './powerUpGlyph';
 import { GAME, ASTEROID, POWERUP } from './constants';
 import audioManager from '../assets/audio/AudioManager';
-export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate, onPowerUpsUpdate) {
+
+const VERSUS_ATTACK_COLOR = '#ff3b3b';
+// versusLinkRef — null in solo play. During a versus match its .current is
+// { sendAttack(n), attackQueueRef } so the loop can send and receive attacks.
+export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate, onPowerUpsUpdate, versusLinkRef) {
   const stateRef = useRef({});
   const keysRef = useRef({});
   const rafRef = useRef(null);
   const lastTimeRef = useRef(0);
+  const starsRef = useRef([]);
+  // Tracks the previous gameState so resuming from pause continues the
+  // current run instead of starting a new one.
+  const prevGameStateRef = useRef(gameState);
+  const pausedAtRef = useRef(0);
 
   const initState = useCallback(() => {
     const canvas = canvasRef.current;
@@ -41,6 +50,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       effects: { SHIELD: 0, RAPID: 0, SPREAD: 0, MULTI: 0, SLOW: 0 },
       novaWaves: [],
       effectsKey: '',
+      attackTimer: 0,
     };
   }, [canvasRef]);
 
@@ -79,6 +89,8 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       s.comboCount++;
       s.comboTimer = 120;
       if (s.comboCount >= 3) {
+        // Versus: every other chain kill sends an asteroid to the opponent
+        if (s.comboCount % 2 === 1) versusLinkRef?.current?.sendAttack(1);
         const bonus = addScore(50 + Math.max(0, s.comboCount - 3) * 25);
         s.popups.push(ScorePopup.chain(a.x, a.y - 28, bonus));
         audioManager.playChain();
@@ -111,6 +123,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       s.asteroids = [];
       shake(14, 24);
       audioManager.playNova();
+      versusLinkRef?.current?.sendAttack(3);
     } else {
       s.effects[p.type] = POWERUP.DURATION[p.type];
       s.popups.push(ScorePopup.powerUp(p.x, p.y - 24, def.label, def.color));
@@ -149,23 +162,35 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
   }, []);
 
   useEffect(() => {
+    const prevGameState = prevGameStateRef.current;
+    prevGameStateRef.current = gameState;
+
     if (gameState !== 'playing') {
       cancelAnimationFrame(rafRef.current);
+      if (gameState === 'paused') pausedAtRef.current = Date.now();
       return;
     }
 
-    initState();
-    reportEffects(true);
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    const stars = Array.from({ length: 180 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      s: Math.random() * 1.6 + 0.2,
-      a: Math.random() * 0.6 + 0.2,
-      sp: Math.random() * 0.3 + 0.05,
-    }));
+    if (prevGameState === 'paused') {
+      // Resume: keep the run, and don't count paused time toward wave progression
+      stateRef.current.startTime += Date.now() - pausedAtRef.current;
+      keysRef.current = {};
+    } else {
+      initState();
+      starsRef.current = Array.from({ length: 180 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        s: Math.random() * 1.6 + 0.2,
+        a: Math.random() * 0.6 + 0.2,
+        sp: Math.random() * 0.3 + 0.05,
+      }));
+    }
+    reportEffects(true);
+    const stars = starsRef.current;
+    lastTimeRef.current = performance.now();
 
     function update(dt) {
       const s = stateRef.current;
@@ -224,6 +249,19 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       if (s.spawnTimer <= 0) {
         s.asteroids.push(Asteroid.spawn(W, H, s.wave));
         s.spawnTimer = spawnInterval + (Math.random() - 0.5) * 10;
+      }
+
+      // Versus: asteroids sent by the opponent arrive one at a time, in red
+      const link = versusLinkRef?.current;
+      if (link && link.attackQueueRef.current > 0) {
+        s.attackTimer -= dt;
+        if (s.attackTimer <= 0) {
+          const a = Asteroid.spawn(W, H, s.wave);
+          a.color = VERSUS_ATTACK_COLOR;
+          s.asteroids.push(a);
+          link.attackQueueRef.current -= 1;
+          s.attackTimer = 22;
+        }
       }
 
       // Update bullets

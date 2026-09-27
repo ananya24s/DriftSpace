@@ -371,6 +371,12 @@ _playSfx(name) {
     this._chipNotes([220, 165, 110, 82], { step: 0.08, dur: 0.14, vol: 0.06 });
   }
 
+  // Versus countdown: short blips on 3-2-1, a higher long tone on GO
+  playCountdown(go) {
+    if (go) this._chipNotes([1047, 1568], { step: 0.06, dur: 0.28, vol: 0.07 });
+    else this._chipNotes([523], { dur: 0.12, vol: 0.07 });
+  }
+
   playShieldBlock() {
     this._chipNotes([1568, 1047], { step: 0.04, dur: 0.06, vol: 0.05 });
   }

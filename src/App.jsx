@@ -10,6 +10,10 @@ import { MobileControls } from './components/MobileControls';
 import { PortraitOverlay } from './components/PortraitOverlay';
 import './mobile.css';
 import { useHighScores } from './hooks/useHighScores';
+import { useVersus } from './hooks/useVersus';
+import { VersusLobby } from './components/VersusLobby';
+import { VersusHUD } from './components/VersusHUD';
+import { VersusResult } from './components/VersusResult';
 import audioManager from "./assets/audio/AudioManager";
 export default function App() {
   const [gameState, setGameState] = useState('menu');
@@ -21,6 +25,7 @@ export default function App() {
   const [showSubmit, setShowSubmit] = useState(false);
   const [submittedName, setSubmittedName] = useState(null);
   const { scores, saveScore } = useHighScores();
+
   // useRef — not useState — because useState's setter treats a function
   // argument as an updater: setFn(() => fn) calls fn() rather than storing fn.
   const virtualKeyRef = useRef(null);
@@ -38,12 +43,32 @@ export default function App() {
     setGameState('playing');
   }, []);
 
+  // Versus is a separate mode layered on top — 'solo' is the original game.
+  const [mode, setMode] = useState('solo');
+  const modeRef = useRef('solo');
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+  const versus = useVersus({
+    onMatchStart: () => startGame(),
+    // Stop our game when the match is decided — whichever side it ended on
+    onMatchEnd: () => setGameState(g => (g === 'playing' || g === 'versus' ? 'versus-result' : g)),
+  });
+  const versusLinkRef = useRef(null);
+  useEffect(() => {
+    versusLinkRef.current = mode === 'versus'
+      ? { sendAttack: versus.sendAttack, attackQueueRef: versus.attackQueueRef }
+      : null;
+  }, [mode, versus.sendAttack, versus.attackQueueRef]);
+
   const handleDeath = useCallback((finalScore) => {
+    if (modeRef.current === 'versus') {
+      versus.reportDeath(finalScore);
+      return;
+    }
     saveScore(finalScore);
     setLastScore(finalScore);
     setShowSubmit(true);
     setGameState('dead');
-  }, [saveScore]);
+  }, [saveScore, versus.reportDeath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmitDone = useCallback((name) => {
     setSubmittedName(name || null);
@@ -52,7 +77,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = e => {
-      if (e.code === 'KeyP') {
+      if (e.code === 'KeyP' && modeRef.current === 'solo') {
         setGameState(prev => {
           if (prev === 'playing') return 'paused';
           if (prev === 'paused') return 'playing';
@@ -63,10 +88,22 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  // Versus: stream our live score/lives/wave to the opponent
+  useEffect(() => {
+    if (mode === 'versus' && gameState === 'playing') versus.sendStatus({ score, lives, wave });
+  }, [mode, gameState, score, lives, wave]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const exitVersus = useCallback(() => {
+    versus.leave();
+    setMode('solo');
+    setGameState('menu');
+  }, [versus.leave]); // eslint-disable-line react-hooks/exhaustive-deps
+
 useEffect(() => {
   switch (gameState) {
     case 'menu':
     case 'leaderboard':
+    case 'versus':
       audioManager.playMenuMusic();
       break;
 
@@ -75,6 +112,10 @@ useEffect(() => {
       break;
 
     case 'paused':
+      break;
+
+    case 'versus-result':
+      audioManager.fadeToMenu();
       break;
 
     case 'dead':
@@ -99,11 +140,16 @@ useEffect(() => {
         onLivesUpdate={setLives}
         onWaveUpdate={setWave}
         onPowerUpsUpdate={setPowerUps}
+        versusLinkRef={versusLinkRef}
         onReady={handleCanvasReady}
       />
 
       {(gameState === 'playing' || gameState === 'paused') && (
         <HUD score={score} lives={lives} wave={wave} powerUps={powerUps} />
+      )}
+
+      {mode === 'versus' && gameState === 'playing' && (
+        <VersusHUD opponent={versus.opponent} incoming={versus.incoming} />
       )}
 
       {(gameState === 'playing' || gameState === 'paused') && (
@@ -126,6 +172,11 @@ useEffect(() => {
   onLeaderboard={() => {
     audioManager.playClick();
     setGameState('leaderboard');
+  }}
+  onVersus={() => {
+    audioManager.playClick();
+    setMode('versus');
+    setGameState('versus');
   }}
 />
       )}
@@ -151,6 +202,14 @@ useEffect(() => {
   }}
   highlightName={submittedName}
 />
+      )}
+
+      {gameState === 'versus' && (
+        <VersusLobby versus={versus} onBack={exitVersus} />
+      )}
+
+      {gameState === 'versus-result' && (
+        <VersusResult versus={versus} myName={versus.myName} onMenu={exitVersus} />
       )}
 
       {gameState === 'dead' && showSubmit && (

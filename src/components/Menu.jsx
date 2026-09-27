@@ -182,7 +182,7 @@ const CONTROLS = [
    on first render with no flash.
    ============================================================ */
 
-export function Menu({ onStart, onLeaderboard }) {
+export function Menu({ onStart, onLeaderboard, onVersus }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const worldRef = useRef(null);
@@ -195,6 +195,7 @@ export function Menu({ onStart, onLeaderboard }) {
 
   const [launching, setLaunching] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [versusHover, setVersusHover] = useState(false);
   const [launchHover, setLaunchHover] = useState(false);
   const [markFlaring, setMarkFlaring] = useState(false);
   const [markBobbing, setMarkBobbing] = useState(false);
@@ -629,6 +630,11 @@ export function Menu({ onStart, onLeaderboard }) {
     setShowGuide(false);
   }, []);
 
+  const handleVersus = useCallback(() => {
+    if (inputLockedRef.current) return;
+    onVersus();
+  }, [onVersus]);
+
   const handleLeaderboard = useCallback(() => {
     if (inputLockedRef.current) return;
     onLeaderboard();
@@ -738,6 +744,25 @@ export function Menu({ onStart, onLeaderboard }) {
             }}
           >
             LAUNCH
+          </span>
+        </button>
+
+        {/* Versus — separate 1v1 online mode; LAUNCH stays the solo game */}
+        <button
+          style={{
+            ...styles.versusBtn,
+            opacity: launching ? 0.25 : 1,
+            borderColor: versusHover && !launching ? 'rgba(255,59,59,0.85)' : undefined,
+            boxShadow: versusHover && !launching ? '0 0 22px rgba(255,59,59,0.25)' : undefined,
+          }}
+          onMouseEnter={() => setVersusHover(true)}
+          onMouseLeave={() => setVersusHover(false)}
+          onClick={handleVersus}
+          disabled={launching}
+        >
+          <span style={styles.versusTag}>1V1</span>
+          <span style={{ ...styles.versusText, color: versusHover && !launching ? '#fff' : '#ff3b3b' }}>
+            VERSUS
           </span>
         </button>
 
@@ -950,8 +975,27 @@ const styles = {
     color: 'transparent', WebkitTextFillColor: 'transparent',
     transition: 'filter 0.28s ease, opacity 0.28s ease',
   },
+  versusBtn: {
+    marginTop: 16,
+    background: 'rgba(255,59,59,0.04)',
+    border: '1px solid rgba(255,59,59,0.4)',
+    borderRadius: 2,
+    padding: '11px 26px 9px',
+    display: 'flex', alignItems: 'center', gap: 12,
+    cursor: 'pointer',
+    transition: 'border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.15s ease',
+  },
+  versusTag: {
+    fontFamily: FONT_MONO, fontSize: 9, letterSpacing: 2,
+    color: 'rgba(255,255,255,0.4)',
+  },
+  versusText: {
+    fontFamily: "'Press Start 2P', monospace", fontSize: 12, letterSpacing: 5,
+    textShadow: '0 0 10px rgba(255,59,59,0.55)',
+    transition: 'color 0.2s ease',
+  },
   ticker: {
-    marginTop: 28,
+    marginTop: 20,
     background: 'rgba(0,229,255,0.03)',
     border: '1px solid rgba(0,229,255,0.18)',
     borderRadius: 2,

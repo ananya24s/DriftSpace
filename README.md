@@ -6,7 +6,7 @@
 
 ### A polished arcade space shooter built with **React**, **HTML5 Canvas**, and **Supabase**.
 
-Destroy asteroid fields, chain massive combos, survive increasingly difficult waves, and climb the global leaderboard in a modern browser-based arcade experience.
+Destroy asteroid fields, grab retro power-ups, chain massive combos, survive increasingly difficult waves, and climb the global leaderboard in a modern browser-based arcade experience.
 
 <br>
 
@@ -42,7 +42,8 @@ The project was built with a strong emphasis on clean architecture, reusable ren
 - 🎯 Endless arcade gameplay
 - 💥 Combo chain bonus system
 - 🌊 Dynamic wave progression
-- 🛸 Three-life system
+- ⚡ 7 collectible 8-bit power-ups
+- ❤️ Extra lives (up to 5)
 - ✨ Floating score popups
 - 💥 Explosion polish & debris effects
 - 🏆 Global leaderboard powered by Supabase
@@ -65,6 +66,7 @@ Features include:
 - Dynamic camera drift
 - Animated asteroid field
 - Real-time global pilot ticker
+- Built-in power-ups guide for new players
 - Shared gameplay renderer
 - Smooth warp transition into gameplay
 
@@ -78,7 +80,8 @@ Gameplay includes:
 
 - Endless wave progression
 - Dynamic difficulty scaling
-- Three-life system
+- Three lives to start, with extra lives up to five
+- Collectible power-ups
 - Combo chain bonuses
 - Floating score feedback
 - Impact flash effects
@@ -86,6 +89,41 @@ Gameplay includes:
 - Wave announcements
 - Pause & resume support
 - Game over summary screen
+
+---
+
+## ⚡ Power-Ups
+
+Shoot asteroids to shake power-ups loose, then fly into one to collect it. Each pickup is a glowing 8-bit sprite that blinks before it vanishes, so grab it fast.
+
+| | Power-Up | Effect |
+|---|----------|--------|
+| ❤️ | **+1 Life** | Adds an extra ship, up to 5. Already full? Bonus points instead. |
+| 🛡️ | **Shield** | 8 seconds of armour. Asteroids that touch it are smashed. |
+| ⚡ | **Rapid Fire** | Your blaster fires much faster for 10 seconds. |
+| 🔱 | **Spread Shot** | Fires three bullets in a fan for 10 seconds. |
+| ✖️ | **Score x2** | Every point, including chain bonuses, counts double for 10 seconds. |
+| 💥 | **Nova Bomb** | Wipes out every asteroid on screen at once. |
+| ⏳ | **Slow-Mo** | Asteroids crawl for 6 seconds while you move at full speed. |
+
+Timed power-ups appear at the top of the screen with a block-by-block countdown bar. Collecting a power-up that's already active refreshes its timer, and several can run at once.
+
+New players can open the **Power-Ups** guide from the title screen to see what every pickup does.
+
+---
+
+## 🕹 Controls
+
+| Key | Action |
+|-----|--------|
+| `W` / `↑` | Thrust |
+| `S` / `↓` | Reverse thrust |
+| `A` `D` / `←` `→` | Turn |
+| `Space` / `Z` | Fire |
+| `P` | Pause |
+| `R` | Retry |
+
+On touch devices, a virtual joystick and fire button appear automatically (landscape mode).
 
 ---
 
@@ -111,6 +149,7 @@ A centralized audio architecture powers every game state.
 - Shared Audio Manager
 - Menu & gameplay music
 - Combo sound effects
+- Synthesized chiptune power-up jingles (Web Audio API)
 - Smooth music transitions
 
 ---
@@ -123,6 +162,7 @@ Shared assets include:
 
 - Ship geometry
 - Asteroid renderer
+- Power-up pixel sprites (shared by the canvas, HUD and guide)
 - Brand emblem
 - HUD icons
 - Gameplay rendering
@@ -139,30 +179,38 @@ This approach ensures complete visual consistency while minimizing duplicated re
 src
 │
 ├── components
-│   ├── Menu
-│   ├── HUD
-│   ├── Leaderboard
-│   ├── DeathScreen
-│   ├── PauseScreen
-│   ├── AudioToggle
-│   └── ScorePopup
+│   ├── Menu.jsx              # Living title screen + pause screen
+│   ├── PowerUpGuide.jsx      # Title-screen power-ups strip & guide
+│   ├── GameCanvas.jsx        # Canvas host for the game loop
+│   ├── HUD.jsx               # Score, lives, wave, active power-ups
+│   ├── PixelIcon.jsx         # 8-bit power-up sprite (SVG)
+│   ├── Leaderboard.jsx
+│   ├── ScoreSubmissionModal.jsx
+│   ├── DeathScreen.jsx
+│   ├── MobileControls.jsx
+│   ├── PortraitOverlay.jsx
+│   ├── AudioToggle.jsx
+│   ├── DriftSpaceLogo.jsx
+│   └── DriftSpaceMark.jsx
 │
 ├── game
-│   ├── entities
-│   ├── rendering
-│   ├── systems
-│   ├── particles
-│   └── effects
-│
-├── audio
-│
-├── hooks
-│
-├── utils
+│   ├── useGameLoop.js        # Update / render loop, collisions, effects
+│   ├── Ship.js
+│   ├── Asteroid.js
+│   ├── Bullet.js
+│   ├── PowerUp.js            # Pickup entity (drop, drift, collect)
+│   ├── powerUpGlyph.js       # Power-up definitions & pixel bitmaps
+│   ├── Particle.js           # Particles, debris, flashes, popups, nova
+│   ├── shipGlyph.js
+│   ├── asteroidGlyph.js
+│   └── constants.js          # Tuning values (incl. power-up rates)
 │
 ├── assets
+│   └── audio                 # AudioManager, music & SFX
 │
-└── styles
+├── hooks                     # High scores & leaderboard
+│
+└── services                  # Supabase client
 ```
 
 ---
@@ -174,7 +222,9 @@ src
 | React | User Interface |
 | HTML5 Canvas | Game Rendering |
 | JavaScript (ES6+) | Gameplay Logic |
-| CSS Modules | Styling |
+| CSS & inline styles | Styling |
+| Framer Motion | UI Animation |
+| Web Audio API | Chiptune Sound Effects |
 | Vite | Build Tool |
 | Supabase | Global Leaderboard & Backend |
 
@@ -235,7 +285,6 @@ While the core experience is complete, planned gameplay expansions include:
 - 👾 Enemy spacecraft
 - 🛰 Additional asteroid behaviors
 - ⚔ Boss encounters
-- ⚡ Power-ups
 - 🌌 New gameplay modes
 - 📈 Expanded player statistics
 
