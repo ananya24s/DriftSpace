@@ -90,6 +90,9 @@ export function useVersus(callbacks = {}) {
   const matchIdRef     = useRef(null);
   const lastHeardRef   = useRef({});      // id → timestamp
   const goneIdsRef     = useRef(new Set());
+  const presenceSeenRef = useRef(new Set()); // ids Supabase presence has listed at least once
+  const meRef          = useRef(null);       // our own { id, name, role, joinedAt }
+  const hostListRef    = useRef(false);      // guest: have we received the host's official list?
   const busySentRef    = useRef(new Set());
   const myDeadRef      = useRef(false);
   const attackQueueRef = useRef([]);      // colours of incoming asteroids; drained by the game loop
@@ -255,6 +258,9 @@ export function useVersus(callbacks = {}) {
     matchIdRef.current = null;
     lastHeardRef.current = {};
     goneIdsRef.current = new Set();
+    presenceSeenRef.current = new Set();
+    meRef.current = null;
+    hostListRef.current = false;
     busySentRef.current = new Set();
     attackQueueRef.current = [];
     myDeadRef.current = false;
@@ -275,14 +281,22 @@ export function useVersus(callbacks = {}) {
     setError(message);
   }, [resetAll]);
 
+  // Host: share the official pilot list (slot order + who didn't fit)
+  const broadcastRoom = useCallback((overflow = []) => {
+    if (roleRef.current !== 'host') return;
+    roomRef.current?.send('room', { members: membersRef.current, overflow });
+  }, []);
+
   // intentional: they pressed LEAVE / closed the tab ('bye'), vs. just vanished
   const handleGone = useCallback((id, intentional = false) => {
     if (id === myIdRef.current || goneIdsRef.current.has(id)) return;
     goneIdsRef.current.add(id);
+    presenceSeenRef.current.delete(id);
     delete lastHeardRef.current[id];
 
     membersRef.current = membersRef.current.filter(m => m.id !== id);
     setMembers(membersRef.current);
+    broadcastRoom();
 
     const p = playersRef.current[id];
     if (p) {
@@ -299,13 +313,107 @@ export function useVersus(callbacks = {}) {
         else later(() => { if (!hostIdRef.current && phaseRef.current === 'lobby') fail('HOST LEFT THE ROOM'); }, HOST_GRACE_MS);
       }
     }
-  }, [eliminate, fail, later, publishPlayers]);
+  }, [broadcastRoom, eliminate, fail, later, publishPlayers]);
+
+  // ---- Who is in the room ----
+  //
+  // The host owns the official pilot list: pilots keep their slot, newcomers
+  // go after, and anyone past slot 4 is told the room is full. Guests adopt
+  // the host's list, so every screen shows the same slots and colours. (Join
+  // times come from each device's clock, which can be off, so they're only
+  // used to order pilots while we're still joining.)
+
+  const applyRoom = useCallback(room => {
+    const meId = myIdRef.current;
+    const joined = room.filter(m => !membersRef.current.some(x => x.id === m.id) && m.id !== meId);
+    membersRef.current = room;
+    setMembers(room);
+
+    const hostMember = room.find(m => m.role === 'host');
+    if (hostMember) { hostIdRef.current = hostMember.id; setHostPresent(true); }
+
+    const now = Date.now();
+    room.forEach(m => { if (!(m.id in lastHeardRef.current)) lastHeardRef.current[m.id] = now; });
+
+    if (joined.length && phaseRef.current === 'lobby') audioManager.playPowerUp('SHIELD');
+    if (roleRef.current === 'guest' && phaseRef.current === 'connecting' && hostMember) setPhase('lobby');
+
+    // Host: pilots who arrive mid-match wait for the next round
+    if (roleRef.current === 'host' && phaseRef.current !== 'lobby') {
+      room.forEach(m => {
+        if (m.id !== meId && !rosterRef.current.includes(m.id) && !busySentRef.current.has(m.id)) {
+          busySentRef.current.add(m.id);
+          roomRef.current?.send('busy', { to: m.id });
+        }
+      });
+    }
+  }, [setPhase]);
+
+  // Merges pilots we've learned about (from presence or 'hello')
+  const mergeRoom = useCallback((candidates, { announce = false } = {}) => {
+    const isHost = roleRef.current === 'host';
+    const valid = candidates.filter(c => !goneIdsRef.current.has(c.id));
+    const known = membersRef.current
+      .filter(m => !goneIdsRef.current.has(m.id))
+      .map(m => valid.find(c => c.id === m.id) ?? m);
+    // Once a guest has the host's list, the host places newcomers
+    const fresh = (isHost || !hostListRef.current)
+      ? valid.filter(c => !membersRef.current.some(m => m.id === c.id))
+      : [];
+    let all = [...known, ...fresh];
+    if (phaseRef.current === 'connecting') all = all.sort((a, b) => a.joinedAt - b.joinedAt);
+
+    const room = all.slice(0, MAX_PLAYERS);
+    const changed = room.length !== membersRef.current.length
+      || room.some((m, i) => m.id !== membersRef.current[i]?.id);
+    applyRoom(room);
+    if (isHost && (changed || announce || all.length > MAX_PLAYERS)) {
+      broadcastRoom(all.slice(MAX_PLAYERS).map(m => m.id));
+    }
+  }, [applyRoom, broadcastRoom]);
 
   // ---- Incoming messages ----
 
   const handleMessage = useCallback(msg => {
     const from = msg.from;
-    if (!from || goneIdsRef.current.has(from)) return;
+    if (!from) return;
+
+    // A pilot announcing themselves (instant — presence can lag seconds behind)
+    if (msg.type === 'hello' || msg.type === 'hello-back') {
+      if (!ACTIVE_PHASES.includes(phaseRef.current)) goneIdsRef.current.delete(from);
+      if (goneIdsRef.current.has(from)) return;
+      lastHeardRef.current[from] = Date.now();
+      mergeRoom([{
+        id: from,
+        name: typeof msg.name === 'string' ? msg.name.slice(0, 12) : 'PILOT',
+        role: msg.role === 'host' ? 'host' : 'guest',
+        joinedAt: Number(msg.joinedAt) || Date.now(),
+      }], { announce: msg.type === 'hello' });
+      if (msg.type === 'hello' && meRef.current) roomRef.current?.send('hello-back', meRef.current);
+      return;
+    }
+
+    // The host's official pilot list
+    if (msg.type === 'room') {
+      const list = Array.isArray(msg.members) ? msg.members : [];
+      if (!list.some(m => m.id === from && m.role === 'host') || roleRef.current === 'host') return;
+      const meId = myIdRef.current;
+      if (Array.isArray(msg.overflow) && msg.overflow.includes(meId)) { fail('ROOM FULL'); return; }
+      if (!list.some(m => m.id === meId)) return; // host hasn't placed us yet
+      hostListRef.current = true;
+      applyRoom(list
+        .filter(m => m && typeof m.id === 'string' && !goneIdsRef.current.has(m.id))
+        .slice(0, MAX_PLAYERS)
+        .map(m => ({
+          id: m.id,
+          name: typeof m.name === 'string' ? m.name.slice(0, 12) : 'PILOT',
+          role: m.role === 'host' ? 'host' : 'guest',
+          joinedAt: Number(m.joinedAt) || 0,
+        })));
+      return;
+    }
+
+    if (goneIdsRef.current.has(from)) return;
     lastHeardRef.current[from] = Date.now();
     const p = playersRef.current[from];
     const inMatch = ACTIVE_PHASES.includes(phaseRef.current);
@@ -349,10 +457,9 @@ export function useVersus(callbacks = {}) {
       default:
         break;
     }
-  }, [eliminate, handleGone, publishPlayers, pushEmote, startMatch]);
+  }, [applyRoom, eliminate, fail, handleGone, mergeRoom, publishPlayers, pushEmote, startMatch]);
 
-  // ---- Presence (who is in the room) ----
-
+  // Supabase presence: the source of truth for who has *left*
   const handleMembers = useCallback((list, meId) => {
     // Between matches, a pilot who dropped out (phone went to background)
     // and reconnected is welcome back. Mid-match they stay out.
@@ -360,47 +467,23 @@ export function useVersus(callbacks = {}) {
       list.forEach(m => goneIdsRef.current.delete(m.id));
     }
     const present = list.filter(m => !goneIdsRef.current.has(m.id));
-    // Only a newcomer decides the room is full — pilots already inside are
-    // never bumped (join times come from each device's clock, which can be off)
-    if (phaseRef.current === 'connecting' && present.length > MAX_PLAYERS) { fail('ROOM FULL'); return; }
 
-    const hosts = present.filter(m => m.role === 'host');
-    if (roleRef.current === 'host' && hosts[0] && hosts[0].id !== meId) {
+    const otherHost = present.find(m => m.role === 'host' && m.id !== meId);
+    if (roleRef.current === 'host' && otherHost && otherHost.joinedAt < (meRef.current?.joinedAt ?? Infinity)) {
       fail('CODE CLASH — HOST AGAIN');
       return;
     }
 
-    // Anyone who dropped out of presence has left
+    // Left = presence listed them before and doesn't now. (Pilots we only
+    // know from 'hello' so far aren't dropped just because presence is slow.)
     const ids = new Set(present.map(m => m.id));
-    membersRef.current.forEach(m => { if (!ids.has(m.id)) handleGone(m.id); });
+    membersRef.current.forEach(m => {
+      if (presenceSeenRef.current.has(m.id) && !ids.has(m.id)) handleGone(m.id);
+    });
+    present.forEach(m => presenceSeenRef.current.add(m.id));
 
-    const now = Date.now();
-    present.forEach(m => { if (!(m.id in lastHeardRef.current)) lastHeardRef.current[m.id] = now; });
-
-    // Stable slots: pilots already listed keep their place, newcomers go after
-    const known = membersRef.current.map(m => present.find(p => p.id === m.id)).filter(Boolean);
-    const fresh = present.filter(p => !membersRef.current.some(m => m.id === p.id));
-    const room = [...known, ...fresh].slice(0, MAX_PLAYERS);
-    const joined = room.filter(m => !membersRef.current.some(x => x.id === m.id) && m.id !== meId);
-    membersRef.current = room;
-    setMembers(room);
-    hostIdRef.current = hosts[0]?.id ?? null;
-    setHostPresent(!!hosts[0]);
-
-    if (joined.length && phaseRef.current === 'lobby') audioManager.playPowerUp('SHIELD');
-
-    if (roleRef.current === 'guest' && phaseRef.current === 'connecting' && hosts[0]) setPhase('lobby');
-
-    // Host: pilots who arrive mid-match wait for the next round
-    if (roleRef.current === 'host' && phaseRef.current !== 'lobby') {
-      room.forEach(m => {
-        if (m.id !== meId && !rosterRef.current.includes(m.id) && !busySentRef.current.has(m.id)) {
-          busySentRef.current.add(m.id);
-          roomRef.current?.send('busy', { to: m.id });
-        }
-      });
-    }
-  }, [fail, handleGone, setPhase]);
+    mergeRoom(present);
+  }, [fail, handleGone, mergeRoom]);
 
   // ---- Connecting ----
 
@@ -425,6 +508,12 @@ export function useVersus(callbacks = {}) {
             // the realtime client rejoins by itself and we re-announce ourselves
             if (s === 'error') { if (!connected) fail("CAN'T REACH SERVER"); return; }
             connected = true;
+            // Add ourselves and announce to the room straight away (also on
+            // every reconnect); everyone already here answers with 'hello-back'
+            if (meRef.current) {
+              mergeRoom([meRef.current]);
+              roomRef.current?.send('hello', meRef.current);
+            }
             if (asRole === 'host' && phaseRef.current === 'connecting') setPhase('lobby');
           },
         },
@@ -435,6 +524,9 @@ export function useVersus(callbacks = {}) {
     }
     myIdRef.current = roomRef.current.id;
     setMyId(roomRef.current.id);
+    meRef.current = { id: roomRef.current.id, name, role: asRole, joinedAt: roomRef.current.joinedAt };
+    // List ourselves from the start, so the room-full check counts us
+    mergeRoom([meRef.current]);
 
     later(() => { if (!connected) fail("CAN'T REACH SERVER"); }, CONNECT_TIMEOUT_MS);
     if (asRole === 'guest') {
@@ -459,7 +551,7 @@ export function useVersus(callbacks = {}) {
         });
       }
     }, HEARTBEAT_MS);
-  }, [fail, handleGone, handleMembers, handleMessage, later, resetAll, setPhase]);
+  }, [fail, handleGone, handleMembers, handleMessage, later, mergeRoom, resetAll, setPhase]);
 
   const host = useCallback(name => open(makeRoomCode(), 'host', name), [open]);
 

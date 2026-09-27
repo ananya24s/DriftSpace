@@ -67,6 +67,7 @@ export function connectRoom({ code, name, role, handlers }) {
 
   return {
     id,
+    joinedAt,
     send(type, data = {}) {
       channel.send({ type: 'broadcast', event: 'msg', payload: { type, from: id, ...data } })
         .catch(() => {});
