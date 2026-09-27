@@ -377,6 +377,11 @@ _playSfx(name) {
     else this._chipNotes([523], { dur: 0.12, vol: 0.07 });
   }
 
+  // Versus emote: a quick two-note chirp
+  playEmote() {
+    this._chipNotes([988, 1319], { step: 0.05, dur: 0.07, vol: 0.05 });
+  }
+
   playShieldBlock() {
     this._chipNotes([1568, 1047], { step: 0.04, dur: 0.06, vol: 0.05 });
   }

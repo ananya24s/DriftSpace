@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { VsStyle, VsButton, PilotSlots } from './VersusLobby';
 import { st } from './versusStyles';
+import { EmoteBar } from './VersusEmotes';
 import audioManager from '../assets/audio/AudioManager';
 
 const FONT_PIXEL = "'Press Start 2P', monospace";
@@ -95,6 +96,7 @@ export function VersusResult({ versus, onMenu }) {
           <div className="ds-vs-divider" style={st.divider} />
           <div style={{ ...st.label, animation: 'vs-blink 1s steps(1) infinite' }}>● LIVE</div>
           <Standings rows={live} live />
+          <EmoteBar onSend={versus.sendEmote} />
           <div style={st.btnCol}>
             <VsButton onClick={leave}>LEAVE ROOM</VsButton>
           </div>
@@ -136,6 +138,7 @@ export function VersusResult({ versus, onMenu }) {
           ) : (
             <div style={{ ...st.status, fontSize: 8, color: RED }}>HOST LEFT · NO MORE ROUNDS</div>
           )}
+          {members.length >= 2 && <EmoteBar onSend={versus.sendEmote} />}
           <VsButton onClick={leave}>LEAVE ROOM</VsButton>
         </div>
         <div className="ds-short-hide" style={st.hint}>VERSUS SCORES DON&apos;T GO ON THE LEADERBOARD</div>

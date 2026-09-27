@@ -14,6 +14,7 @@ import { useVersus } from './hooks/useVersus';
 import { VersusLobby } from './components/VersusLobby';
 import { VersusHUD } from './components/VersusHUD';
 import { VersusResult } from './components/VersusResult';
+import { EmoteFeed, InGameEmotes } from './components/VersusEmotes';
 import audioManager from "./assets/audio/AudioManager";
 export default function App() {
   const [gameState, setGameState] = useState('menu');
@@ -75,8 +76,22 @@ export default function App() {
     setShowSubmit(false);
   }, []);
 
+  // Latest screen state for the global key handler below
+  const screenRef = useRef({ gameState, showSubmit });
+  useEffect(() => { screenRef.current = { gameState, showSubmit }; }, [gameState, showSubmit]);
+
   useEffect(() => {
     const onKey = e => {
+      // R: retry from the solo game-over screen (not while typing a name)
+      if (e.code === 'KeyR' && !e.repeat) {
+        const { gameState: gs, showSubmit: typingName } = screenRef.current;
+        const inField = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+        if (gs === 'dead' && !typingName && !inField) {
+          audioManager.playClick();
+          startGame();
+        }
+        return;
+      }
       if (e.code === 'KeyP' && modeRef.current === 'solo') {
         setGameState(prev => {
           if (prev === 'playing') return 'paused';
@@ -87,7 +102,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [startGame]);
   // Versus: stream our live score/lives/wave to the room
   useEffect(() => {
     if (mode === 'versus' && gameState === 'playing') versus.sendStatus({ score, lives, wave });
@@ -150,7 +165,10 @@ useEffect(() => {
       )}
 
       {mode === 'versus' && gameState === 'playing' && (
-        <VersusHUD rivals={versus.players.filter(p => !p.isMe)} incoming={versus.incoming} />
+        <>
+          <VersusHUD rivals={versus.players.filter(p => !p.isMe)} incoming={versus.incoming} />
+          <InGameEmotes onSend={versus.sendEmote} />
+        </>
       )}
 
       {(gameState === 'playing' || gameState === 'paused') && (
@@ -211,6 +229,10 @@ useEffect(() => {
 
       {gameState === 'versus-result' && (
         <VersusResult versus={versus} onMenu={exitVersus} />
+      )}
+
+      {mode === 'versus' && (
+        <EmoteFeed emotes={versus.emotes} inGame={gameState === 'playing'} />
       )}
 
       {gameState === 'dead' && showSubmit && (

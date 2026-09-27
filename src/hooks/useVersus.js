@@ -23,6 +23,12 @@ export const MAX_PLAYERS = 4;
 // of your own ship and bullets.
 export const PLAYER_COLORS = ['#ff3b3b', '#ffd700', '#ff4dff', '#b4ff39'];
 
+// Quick emotes — short arcade-style text, sent by index
+export const EMOTES = ['GLHF', 'GG', 'NICE!', 'LOL', 'OOPS', 'RIP'];
+const EMOTE_COOLDOWN_MS  = 1200;
+const EMOTE_TTL_MS       = 2800;
+const EMOTE_FEED_MAX     = 3;
+
 const COUNTDOWN_FROM     = 3;
 const COUNTDOWN_STEP_MS  = 900;
 const JOIN_TIMEOUT_MS    = 6000;
@@ -71,6 +77,7 @@ export function useVersus(callbacks = {}) {
   const [count, setCount]       = useState(0);
   const [result, setResult]     = useState(null);
   const [incoming, setIncoming] = useState({ n: 0, tick: 0, name: '', color: '' });
+  const [emotes, setEmotes]     = useState([]);   // recent emotes feed
 
   const phaseRef       = useRef('idle');
   const roleRef        = useRef(null);
@@ -89,6 +96,7 @@ export function useVersus(callbacks = {}) {
   const timersRef      = useRef([]);
   const statusRef      = useRef({ last: 0, timer: null, latest: null });
   const heartbeatRef   = useRef(null);
+  const lastEmoteRef   = useRef(0);
 
   const setPhase = useCallback(p => { phaseRef.current = p; setPhaseState(p); }, []);
 
@@ -134,6 +142,39 @@ export function useVersus(callbacks = {}) {
     publishPlayers();
     checkMatchOver();
   }, [aliveIds, checkMatchOver, publishPlayers]);
+
+  // ---- Emotes ----
+
+  // Match colour if in a round, otherwise the lobby slot colour
+  // (Presence can lag a moment behind messages, so the sender's name also
+  // travels with the emote; unknown pilots show in neutral white.)
+  const pilotLook = useCallback((id, sentName) => {
+    const p = playersRef.current[id];
+    if (p) return { name: p.name, color: p.color };
+    const i = membersRef.current.findIndex(m => m.id === id);
+    if (i < 0) return { name: sentName || 'PILOT', color: '#ffffff' };
+    return { name: membersRef.current[i].name, color: PLAYER_COLORS[i % PLAYER_COLORS.length] };
+  }, []);
+
+  const pushEmote = useCallback((from, index, sentName) => {
+    const text = EMOTES[index];
+    if (!text) return;
+    const { name, color } = pilotLook(from, sentName);
+    const key = `${from}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const entry = { key, name, color, text, isMe: from === myIdRef.current };
+    setEmotes(list => [...list.slice(-(EMOTE_FEED_MAX - 1)), entry]);
+    setTimeout(() => setEmotes(list => list.filter(e => e.key !== key)), EMOTE_TTL_MS);
+  }, [pilotLook]);
+
+  const sendEmote = useCallback(index => {
+    if (!roomRef.current || membersRef.current.length < 2 || !EMOTES[index]) return;
+    const now = Date.now();
+    if (now - lastEmoteRef.current < EMOTE_COOLDOWN_MS) return;
+    lastEmoteRef.current = now;
+    roomRef.current.send('emote', { e: index, name: pilotLook(myIdRef.current).name });
+    pushEmote(myIdRef.current, index);
+    audioManager.playEmote();
+  }, [pilotLook, pushEmote]);
 
   // ---- Starting a round ----
 
@@ -225,6 +266,7 @@ export function useVersus(callbacks = {}) {
     setBusy(false);
     setHostPresent(false);
     setResult(null);
+    setEmotes([]);
     setPhase('idle');
   }, [clearTimers, setPhase]);
 
@@ -300,10 +342,14 @@ export function useVersus(callbacks = {}) {
       case 'bye':
         handleGone(from, true);
         break;
+      case 'emote':
+        pushEmote(from, msg.e, typeof msg.name === 'string' ? msg.name.slice(0, 12) : '');
+        audioManager.playEmote();
+        break;
       default:
         break;
     }
-  }, [eliminate, handleGone, publishPlayers, startMatch]);
+  }, [eliminate, handleGone, publishPlayers, pushEmote, startMatch]);
 
   // ---- Presence (who is in the room) ----
 
@@ -482,9 +528,9 @@ export function useVersus(callbacks = {}) {
 
   return {
     phase, code, role, myName, myId, members, players, busy, hostPresent,
-    error, count, result, incoming,
+    error, count, result, incoming, emotes,
     attackQueueRef,
-    host, join, leave, start,
+    host, join, leave, start, sendEmote,
     sendStatus, sendAttack, reportDeath,
     clearError: () => setError(null),
   };

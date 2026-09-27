@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import audioManager from '../assets/audio/AudioManager';
 import { st } from './versusStyles';
 import { MAX_PLAYERS, PLAYER_COLORS } from '../hooks/useVersus';
+import { EmoteBar } from './VersusEmotes';
 
 const FONT_PIXEL = "'Press Start 2P', monospace";
 const CYAN       = '#00e5ff';
@@ -176,7 +177,7 @@ export function VersusLobby({ versus, onBack }) {
     const canStart = members.length >= 2;
     body = (
       <>
-        <div style={st.label}>ROOM CODE</div>
+        <div className="ds-short-hide" style={st.label}>ROOM CODE</div>
         <button className="ds-vs-code" style={st.codeBox} onClick={copyCode} title="Copy code">
           {code}
         </button>
@@ -213,6 +214,7 @@ export function VersusLobby({ versus, onBack }) {
             WAITING FOR HOST TO START
           </div>
         )}
+        {members.length >= 2 && <EmoteBar onSend={versus.sendEmote} />}
         <VsButton onClick={back}>LEAVE ROOM</VsButton>
       </>
     );

@@ -132,6 +132,7 @@ Play live against 1–3 friends. Everyone flies their own ship in their own aste
 - The bottom of the screen shows every rival's name, score and lives.
 - A pilot who joins mid-round waits in the lobby and joins the next round.
 - A pilot who disconnects is counted as out, and the match carries on.
+- **Quick emotes:** send **GLHF, GG, NICE!, LOL, OOPS** or **RIP** to the room. Use the buttons in the lobby and results, keys **1–6** mid-match, or the **SAY** button on phones. They pop up in the sender's colour.
 - Pause is off in Versus, since the match is live for everyone.
 - Versus scores never go on the global leaderboard.
 - It runs on Supabase Realtime (Broadcast + Presence), so there's no game server and nothing is stored in the database.
@@ -147,7 +148,8 @@ Play live against 1–3 friends. Everyone flies their own ship in their own aste
 | `A` `D` / `←` `→` | Turn |
 | `Space` / `Z` | Fire |
 | `P` | Pause (solo) |
-| `R` | Retry |
+| `R` | Retry (game-over screen) |
+| `1`–`6` | Quick emotes (Versus) |
 
 ---
 
@@ -157,6 +159,7 @@ Every mode works on touch devices:
 
 - **Controls:** a virtual joystick (steer and thrust) and a fire button appear during gameplay.
 - **Pause:** in solo games, use the on-screen pause button under your score.
+- **Emotes:** in Versus matches, tap **SAY** under your score to open the emote tray.
 - **Orientation:** gameplay is played in landscape. The Versus lobby and results also work in portrait, which makes typing names and codes easier.
 - **Sharing a room code:** use **SHARE CODE** to send it through the phone's share sheet (WhatsApp, Messages…) without leaving the game.
 - **Switching apps briefly:** a pilot who switches apps in the lobby reconnects automatically when they come back. If the host drops out, the room waits 20 seconds for them.
@@ -225,6 +228,7 @@ src
 │   ├── VersusLobby.jsx       # Host / join, pilot slots, countdown
 │   ├── VersusHUD.jsx         # In-game rival chips & INCOMING warning
 │   ├── VersusResult.jsx      # Spectating, rankings, play again
+│   ├── VersusEmotes.jsx      # Emote feed, emote buttons, SAY tray
 │   ├── versusStyles.js       # Shared styles for the versus screens
 │   ├── Leaderboard.jsx
 │   ├── ScoreSubmissionModal.jsx
