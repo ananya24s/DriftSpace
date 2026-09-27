@@ -99,7 +99,6 @@ export function PowerUpGuide({ onClose }) {
 
 const styles = {
   strip: {
-    marginTop: 12,
     background: 'rgba(0,229,255,0.03)',
     border: '1px solid',
     borderRadius: 2,

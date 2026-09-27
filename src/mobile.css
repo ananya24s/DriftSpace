@@ -32,3 +32,13 @@ html {
     display: flex !important;
   }
 }
+/* Touch devices: the bottom edge belongs to the joystick and fire button,
+   so the home-screen power-ups strip moves to the free top-left corner */
+@media (hover: none) and (pointer: coarse) {
+  .ds-pu-corner {
+    top: max(env(safe-area-inset-top, 0px) + 10px, 12px) !important;
+    left: max(env(safe-area-inset-left, 0px) + 12px, 16px) !important;
+    right: auto !important;
+    bottom: auto !important;
+  }
+}

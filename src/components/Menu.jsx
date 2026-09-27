@@ -62,7 +62,7 @@ function clampOutsideRect(obj, rect, pad) {
 // modest — enough that the gameplay color variety (the occasional
 // purple/orange from randomAsteroidColor's own distribution) actually
 // shows up, while large open regions remain.
-function spawnAsteroidField(W, H, contentRect, controlsRect) {
+function spawnAsteroidField(W, H, contentRect, controlsRect, powerUpRect) {
   // Match gameplay size distribution: tiny fragments up to large chunks.
   // One 'hero' large rock per field gives the scene a visual anchor.
   const depths = [
@@ -84,7 +84,7 @@ function spawnAsteroidField(W, H, contentRect, controlsRect) {
       x = Math.random() * W;
       y = Math.random() * H;
       tries++;
-    } while (tries < 10 && (pointInRect(x, y, contentRect, 60) || pointInRect(x, y, controlsRect, 40)));
+    } while (tries < 10 && (pointInRect(x, y, contentRect, 60) || pointInRect(x, y, controlsRect, 40) || pointInRect(x, y, powerUpRect, 40)));
 
     const size = rand(r.size[0], r.size[1]);
     return {
@@ -282,6 +282,7 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
       // Protected rects — enlarged to match the bigger hero cluster.
       const contentRect = { x: W * 0.02, y: H * 0.25, w: W * 0.96, h: H * 0.50 };
       const controlsRect = { x: 8, y: H - 92, w: 400, h: 82 };
+      const powerUpRect = { x: W - 360, y: H - 80, w: 352, h: 72 };
 
       // Hero zone: where the ship travels. Slightly larger patch of sky
       // to match the increased hero presence, still left of the text.
@@ -297,9 +298,10 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
         vignette,
         contentRect,
         controlsRect,
+        powerUpRect,
         heroZone,
         heroCenter,
-        asteroids: spawnAsteroidField(W, H, contentRect, controlsRect),
+        asteroids: spawnAsteroidField(W, H, contentRect, controlsRect, powerUpRect),
         wreckage: null,
         camera: { x: 0, y: 0 },
         ship: {
@@ -426,6 +428,7 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
           if (a.y > H + 80) a.y = -80;
           clampOutsideRect(a, w.contentRect, a.size + 10);
           clampOutsideRect(a, w.controlsRect, a.size + 10);
+          clampOutsideRect(a, w.powerUpRect, a.size + 10);
         });
 
         if (!w.wreckage && maybeSpawn(dt, 130)) {
@@ -438,6 +441,7 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
           wr.life -= dt / wr.maxLife;
           clampOutsideRect(wr, w.contentRect, 40);
           clampOutsideRect(wr, w.controlsRect, 40);
+          clampOutsideRect(wr, w.powerUpRect, 40);
           if (wr.life <= 0 || wr.x < -100 || wr.x > W + 100) w.wreckage = null;
         }
       }
@@ -747,23 +751,27 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
           </span>
         </button>
 
-        {/* Versus — separate 1v1 online mode; LAUNCH stays the solo game */}
+        {/* Versus — quiet secondary link; LAUNCH stays the hero */}
         <button
-          style={{
-            ...styles.versusBtn,
-            opacity: launching ? 0.25 : 1,
-            borderColor: versusHover && !launching ? 'rgba(255,59,59,0.85)' : undefined,
-            boxShadow: versusHover && !launching ? '0 0 22px rgba(255,59,59,0.25)' : undefined,
-          }}
+          style={{ ...styles.versusLink, opacity: launching ? 0.25 : 1 }}
           onMouseEnter={() => setVersusHover(true)}
           onMouseLeave={() => setVersusHover(false)}
           onClick={handleVersus}
           disabled={launching}
         >
-          <span style={styles.versusTag}>1V1</span>
-          <span style={{ ...styles.versusText, color: versusHover && !launching ? '#fff' : '#ff3b3b' }}>
-            VERSUS
+          <span style={styles.versusOr}>or</span>
+          <span style={{
+            ...styles.versusText,
+            color: versusHover && !launching ? '#ff3b3b' : 'rgba(0,229,255,0.6)',
+            textShadow: versusHover && !launching ? '0 0 12px rgba(255,59,59,0.6)' : 'none',
+          }}>
+            1V1 VERSUS
           </span>
+          <span style={{
+            ...styles.versusArrow,
+            color: versusHover && !launching ? '#ff3b3b' : 'rgba(0,229,255,0.4)',
+            transform: versusHover && !launching ? 'translateX(3px)' : 'none',
+          }}>›</span>
         </button>
 
         {/* Arcade ticker — cycles through global top scores.
@@ -789,9 +797,6 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
           <span style={styles.tickerArrow}>›</span>
         </button>
 
-        {/* Power-ups intro — opens the guide card */}
-        <PowerUpStrip onOpen={openGuide} disabled={launching} />
-
       </div>
 
       {/* Controls HUD — fixed bottom-left, outside the centered stack */}
@@ -803,6 +808,11 @@ export function Menu({ onStart, onLeaderboard, onVersus }) {
             {i < CONTROLS.length - 1 && <span style={styles.controlSep} />}
           </span>
         ))}
+      </div>
+
+      {/* Power-ups legend — bottom-right, mirroring the controls strip */}
+      <div className="ds-pu-corner" style={styles.powerUpCorner}>
+        <PowerUpStrip onOpen={openGuide} disabled={launching} />
       </div>
 
       {showGuide && <PowerUpGuide onClose={closeGuide} />}
@@ -975,27 +985,34 @@ const styles = {
     color: 'transparent', WebkitTextFillColor: 'transparent',
     transition: 'filter 0.28s ease, opacity 0.28s ease',
   },
-  versusBtn: {
-    marginTop: 16,
-    background: 'rgba(255,59,59,0.04)',
-    border: '1px solid rgba(255,59,59,0.4)',
-    borderRadius: 2,
-    padding: '11px 26px 9px',
-    display: 'flex', alignItems: 'center', gap: 12,
+  versusLink: {
+    marginTop: 18,
+    background: 'transparent', border: 'none',
+    padding: '6px 10px',
+    display: 'flex', alignItems: 'baseline', gap: 10,
     cursor: 'pointer',
-    transition: 'border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.15s ease',
+    transition: 'opacity 0.15s ease',
   },
-  versusTag: {
-    fontFamily: FONT_MONO, fontSize: 9, letterSpacing: 2,
-    color: 'rgba(255,255,255,0.4)',
+  versusOr: {
+    fontFamily: FONT_MONO, fontSize: 10, letterSpacing: 2,
+    color: 'rgba(238,242,248,0.3)',
   },
   versusText: {
-    fontFamily: "'Press Start 2P', monospace", fontSize: 12, letterSpacing: 5,
-    textShadow: '0 0 10px rgba(255,59,59,0.55)',
-    transition: 'color 0.2s ease',
+    fontFamily: "'Press Start 2P', monospace", fontSize: 10, letterSpacing: 4,
+    transition: 'color 0.2s ease, text-shadow 0.2s ease',
+  },
+  versusArrow: {
+    fontSize: 14, lineHeight: 1,
+    transition: 'color 0.2s ease, transform 0.2s ease',
+  },
+  powerUpCorner: {
+    position: 'fixed',
+    right: 'clamp(20px, 3vw, 40px)',
+    bottom: 'clamp(20px, 3vh, 36px)',
+    zIndex: 10,
   },
   ticker: {
-    marginTop: 20,
+    marginTop: 16,
     background: 'rgba(0,229,255,0.03)',
     border: '1px solid rgba(0,229,255,0.18)',
     borderRadius: 2,
