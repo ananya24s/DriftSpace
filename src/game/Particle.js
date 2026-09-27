@@ -151,6 +151,7 @@ export class ScorePopup {
     this.vy       = -(big ? 1.4 : 1.0);
     this.fontSize = big ? 18 : 13;
     this.big      = big;
+    this.font     = null; // null → default mono font
   }
 
   static fromKill(x, y, points, asteroidSize) {
@@ -165,6 +166,14 @@ export class ScorePopup {
     return p;
   }
 
+  // Pickup announcement in the arcade pixel font
+  static powerUp(x, y, label, color) {
+    const p = new ScorePopup(x, y, label, color, true);
+    p.fontSize = 12; p.decay = 0.014; p.vy = -1.2;
+    p.font = "'Press Start 2P', monospace";
+    return p;
+  }
+
   update(dt) { this.y += this.vy * dt; this.life -= this.decay * dt; }
   isAlive()  { return this.life > 0; }
 
@@ -172,13 +181,57 @@ export class ScorePopup {
     ctx.save();
     ctx.globalAlpha = Math.max(this.life, 0) * 0.95;
     ctx.fillStyle   = this.color;
-    ctx.font        = `${this.big ? 700 : 600} ${this.fontSize}px 'JetBrains Mono', 'Courier New', monospace`;
+    ctx.font        = this.font
+      ? `${this.fontSize}px ${this.font}`
+      : `${this.big ? 700 : 600} ${this.fontSize}px 'JetBrains Mono', 'Courier New', monospace`;
     ctx.textAlign   = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = this.color;
     ctx.shadowBlur  = this.big ? 10 : 6;
     ctx.fillText(this.text, this.x, this.y);
     ctx.shadowBlur  = 0;
+    ctx.restore();
+  }
+}
+
+/*
+  NovaWave — the nova bomb shockwave. A ring that expands in hard pixel
+  steps across the whole screen, with a second trailing ring.
+*/
+export class NovaWave {
+  constructor(x, y, maxR) {
+    this.x = x; this.y = y;
+    this.maxR = maxR;
+    this.age  = 0;
+    this.dur  = 40;
+  }
+
+  update(dt) { this.age += dt; }
+  isAlive()  { return this.age < this.dur; }
+
+  draw(ctx) {
+    const t = this.age / this.dur;
+    const stepped = Math.floor(t * 12) / 12;
+    ctx.save();
+    ctx.strokeStyle = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur  = 20;
+    [0, 0.12].forEach((lag, i) => {
+      const k = Math.max(stepped - lag, 0);
+      if (k <= 0) return;
+      ctx.globalAlpha = (1 - k) * (i === 0 ? 0.9 : 0.5);
+      ctx.lineWidth   = i === 0 ? 4 : 2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, k * this.maxR, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+    // Brief full-screen white flash at detonation
+    if (this.age < 6) {
+      ctx.globalAlpha = 0.35 * (1 - this.age / 6);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-20, -20, ctx.canvas.width + 40, ctx.canvas.height + 40);
+    }
+    ctx.shadowBlur = 0;
     ctx.restore();
   }
 }

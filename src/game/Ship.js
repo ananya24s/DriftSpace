@@ -54,14 +54,18 @@ export class Ship {
     return this.shootCooldown <= 0;
   }
 
-  shoot() {
-    this.shootCooldown = SHIP.SHOOT_COOLDOWN;
-    return {
-      x: this.x + Math.cos(this.angle) * 16,
-      y: this.y + Math.sin(this.angle) * 16,
-      vx: this.vx + Math.cos(this.angle) * SHIP.BULLET_SPEED,
-      vy: this.vy + Math.sin(this.angle) * SHIP.BULLET_SPEED,
-    };
+  // offsets — angle offsets (radians) for each bullet; [0] is a single shot.
+  shoot(offsets = [0], cooldown = SHIP.SHOOT_COOLDOWN) {
+    this.shootCooldown = cooldown;
+    return offsets.map(off => {
+      const a = this.angle + off;
+      return {
+        x: this.x + Math.cos(a) * 16,
+        y: this.y + Math.sin(a) * 16,
+        vx: this.vx + Math.cos(a) * SHIP.BULLET_SPEED,
+        vy: this.vy + Math.sin(a) * SHIP.BULLET_SPEED,
+      };
+    });
   }
 
   hit() {
@@ -106,6 +110,36 @@ export class Ship {
       ctx.globalAlpha = 1;
     }
 
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // Shield bubble — a hexagon that rotates in hard 15° steps (retro feel)
+  // and blinks during its final second and a half.
+  drawShield(ctx, remaining, color) {
+    if (remaining < 90 && Math.floor(remaining / 5) % 2 === 0) return;
+    const r = this.radius + 12;
+    const rot = Math.floor(Date.now() / 120) * (Math.PI / 12);
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(rot);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath();
+    ctx.globalAlpha = 0.1;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.globalAlpha = 0.9;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
     ctx.restore();
   }

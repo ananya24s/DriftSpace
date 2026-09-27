@@ -16,6 +16,7 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [wave, setWave] = useState(1);
+  const [powerUps, setPowerUps] = useState([]);
   const [lastScore, setLastScore] = useState(0);
   const [showSubmit, setShowSubmit] = useState(false);
   const [submittedName, setSubmittedName] = useState(null);
@@ -32,7 +33,7 @@ export default function App() {
   }, []);
 
   const startGame = useCallback(() => {
-    setScore(0); setLives(3); setWave(1);
+    setScore(0); setLives(3); setWave(1); setPowerUps([]);
     setShowSubmit(false);
     setGameState('playing');
   }, []);
@@ -97,11 +98,12 @@ useEffect(() => {
         onScoreUpdate={setScore}
         onLivesUpdate={setLives}
         onWaveUpdate={setWave}
+        onPowerUpsUpdate={setPowerUps}
         onReady={handleCanvasReady}
       />
 
       {(gameState === 'playing' || gameState === 'paused') && (
-        <HUD score={score} lives={lives} wave={wave} />
+        <HUD score={score} lives={lives} wave={wave} powerUps={powerUps} />
       )}
 
       {(gameState === 'playing' || gameState === 'paused') && (

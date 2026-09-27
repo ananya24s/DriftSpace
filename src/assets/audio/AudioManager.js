@@ -299,6 +299,82 @@ _playSfx(name) {
     setTimeout(() => this._playSfx('explosion'), 60);
   }
 
+  // ---------- Synthesized chiptune SFX (power-ups) ----------
+  // Square/noise voices generated with Web Audio so pickups sound like
+  // classic 8-bit cartridges without shipping extra audio files.
+
+  _chipCtx() {
+    if (this.isMuted) return null;
+    try {
+      if (!this._ctx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        this._ctx = new Ctx();
+      }
+      if (this._ctx.state === 'suspended') this._ctx.resume().catch(() => {});
+      return this._ctx;
+    } catch { return null; }
+  }
+
+  _chipNotes(freqs, { step = 0.07, dur = 0.09, type = 'square', vol = 0.07 } = {}) {
+    const ctx = this._chipCtx();
+    if (!ctx) return;
+    const level = vol * this.sfxVolumeScale;
+    const t0 = ctx.currentTime + 0.01;
+    freqs.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = t0 + i * step;
+      osc.type = type;
+      osc.frequency.setValueAtTime(f, t);
+      gain.gain.setValueAtTime(level, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+    });
+  }
+
+  playPowerUp(type) {
+    const tunes = {
+      LIFE:   [523, 659, 784, 1047, 1319],   // C major run, classic 1-up
+      SHIELD: [392, 523, 659, 784],
+      RAPID:  [880, 1175, 880, 1175, 1568],
+      SPREAD: [659, 523, 784, 659, 988],
+      MULTI:  [523, 784, 1047, 1568],
+      SLOW:   [784, 659, 523, 392],          // descending — time slowing down
+    };
+    const fast = type === 'RAPID';
+    this._chipNotes(tunes[type] ?? tunes.SHIELD, fast ? { step: 0.045, dur: 0.06 } : undefined);
+  }
+
+  playNova() {
+    const ctx = this._chipCtx();
+    if (!ctx) return;
+    // White-noise blast through a falling lowpass — 8-bit explosion
+    const len = Math.floor(ctx.sampleRate * 0.9);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    const gain = ctx.createGain();
+    const t = ctx.currentTime + 0.01;
+    filter.frequency.setValueAtTime(4000, t);
+    filter.frequency.exponentialRampToValueAtTime(120, t + 0.85);
+    gain.gain.setValueAtTime(0.22 * this.sfxVolumeScale, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.start(t);
+    this._chipNotes([220, 165, 110, 82], { step: 0.08, dur: 0.14, vol: 0.06 });
+  }
+
+  playShieldBlock() {
+    this._chipNotes([1568, 1047], { step: 0.04, dur: 0.06, vol: 0.05 });
+  }
+
   // ---------- Volume / mute controls ----------
 
   setMusicVolume(volume) {

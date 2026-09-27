@@ -34,3 +34,23 @@ export const COLORS = {
   ASTEROID_RARE_1: '#ff6b35',
   ASTEROID_RARE_2: '#a78bfa',
 };
+export const POWERUP = {
+  DROP_CHANCE: 0.09,      // chance a destroyed asteroid drops a power-up
+  DROP_CHANCE_BIG: 0.15,  // bigger rocks are more generous
+  MAX_ON_SCREEN: 3,
+  LIFETIME: 600,          // frames before an uncollected pickup vanishes (~10s)
+  BLINK_AT: 150,          // start blinking this many frames before vanishing
+  PICKUP_RADIUS: 14,
+  MAX_LIVES: 5,
+  FULL_LIVES_BONUS: 250,  // awarded instead of a life when already at max
+  RAPID_COOLDOWN: 5,
+  SPREAD_ANGLE: 0.22,
+  SLOW_FACTOR: 0.4,
+  DURATION: {             // timed effects, in frames (60 ≈ 1s)
+    SHIELD: 480,
+    RAPID: 600,
+    SPREAD: 600,
+    MULTI: 600,
+    SLOW: 360,
+  },
+};

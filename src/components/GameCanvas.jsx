@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useGameLoop } from '../game/useGameLoop';
 
-export function GameCanvas({ gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate, onReady }) {
+export function GameCanvas({ gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate, onPowerUpsUpdate, onReady }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -15,7 +15,7 @@ export function GameCanvas({ gameState, onDeath, onScoreUpdate, onLivesUpdate, o
     return () => window.removeEventListener('resize', resize);
   }, []);
 
-  const { setVirtualKey } = useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate);
+  const { setVirtualKey } = useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate, onPowerUpsUpdate);
 
   // Expose setVirtualKey to parent via onReady callback so App can
   // pass it down to MobileControls without prop-drilling through GameCanvas.

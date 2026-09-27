@@ -7,6 +7,7 @@ import { useLeaderboard } from '../hooks/useLeaderboard';
 import { COLORS } from '../game/constants';
 import audioManager from '../assets/audio/AudioManager';
 import { AudioToggle } from './AudioToggle';
+import { PowerUpStrip, PowerUpGuide } from './PowerUpGuide';
 
 const FONT_DISPLAY = "'Space Grotesk', 'Inter', sans-serif";
 const FONT_BODY = "'Inter', sans-serif";
@@ -193,6 +194,7 @@ export function Menu({ onStart, onLeaderboard }) {
   const onStartRef = useRef(onStart);
 
   const [launching, setLaunching] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const [launchHover, setLaunchHover] = useState(false);
   const [markFlaring, setMarkFlaring] = useState(false);
   const [markBobbing, setMarkBobbing] = useState(false);
@@ -616,6 +618,17 @@ export function Menu({ onStart, onLeaderboard }) {
     launchStartRef.current = performance.now() / 1000;
   }, []);
 
+  const openGuide = useCallback(() => {
+    if (inputLockedRef.current) return;
+    audioManager.playClick();
+    setShowGuide(true);
+  }, []);
+
+  const closeGuide = useCallback(() => {
+    audioManager.playClick();
+    setShowGuide(false);
+  }, []);
+
   const handleLeaderboard = useCallback(() => {
     if (inputLockedRef.current) return;
     onLeaderboard();
@@ -751,6 +764,9 @@ export function Menu({ onStart, onLeaderboard }) {
           <span style={styles.tickerArrow}>›</span>
         </button>
 
+        {/* Power-ups intro — opens the guide card */}
+        <PowerUpStrip onOpen={openGuide} disabled={launching} />
+
       </div>
 
       {/* Controls HUD — fixed bottom-left, outside the centered stack */}
@@ -763,6 +779,8 @@ export function Menu({ onStart, onLeaderboard }) {
           </span>
         ))}
       </div>
+
+      {showGuide && <PowerUpGuide onClose={closeGuide} />}
     </div>
   );
 }

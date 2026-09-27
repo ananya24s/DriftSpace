@@ -2,10 +2,12 @@ import { useEffect, useRef, useCallback } from 'react';
 import { Ship } from './Ship';
 import { Asteroid } from './Asteroid';
 import { Bullet } from './Bullet';
-import { Particle, DebrisShard, ImpactFlash, ScorePopup } from './Particle';
-import { GAME, ASTEROID } from './constants';
+import { Particle, DebrisShard, ImpactFlash, ScorePopup, NovaWave } from './Particle';
+import { PowerUp } from './PowerUp';
+import { POWERUP_TYPES } from './powerUpGlyph';
+import { GAME, ASTEROID, POWERUP } from './constants';
 import audioManager from '../assets/audio/AudioManager';
-export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate) {
+export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate, onPowerUpsUpdate) {
   const stateRef = useRef({});
   const keysRef = useRef({});
   const rafRef = useRef(null);
@@ -34,6 +36,11 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       shards: [],
       prevWave: 1,
       waveAnnounceTimer: 0,
+      powerUps: [],
+      // Remaining frames for each timed effect (0 = inactive)
+      effects: { SHIELD: 0, RAPID: 0, SPREAD: 0, MULTI: 0, SLOW: 0 },
+      novaWaves: [],
+      effectsKey: '',
     };
   }, [canvasRef]);
 
@@ -41,6 +48,90 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
     const s = stateRef.current;
     s.shakeAmt = Math.max(s.shakeAmt, amt);
     s.shakeDur = Math.max(s.shakeDur, dur);
+  };
+
+  // Awards points, applying the score multiplier power-up when active.
+  const addScore = (pts) => {
+    const s = stateRef.current;
+    const gained = s.effects.MULTI > 0 ? pts * 2 : pts;
+    s.score += gained;
+    return gained;
+  };
+
+  // Shared kill effects: flash, debris, score popup, combo chain.
+  const destroyAsteroid = (a, { combo = true } = {}) => {
+    const s = stateRef.current;
+    const big = a.size > 30;
+    const pts = addScore(a.scoreValue());
+    s.kills++;
+
+    // Impact flash — brief white burst at kill point
+    s.flashes.push(ImpactFlash.fromAsteroid(a));
+
+    // Debris shards — line-segment spray
+    s.shards.push(...DebrisShard.burst(a.x, a.y, big ? 10 : 6, a.color, big));
+
+    // Floating score popup
+    s.popups.push(ScorePopup.fromKill(a.x, a.y, pts, a.size));
+
+    // Combo chain
+    if (combo) {
+      s.comboCount++;
+      s.comboTimer = 120;
+      if (s.comboCount >= 3) {
+        const bonus = addScore(50 + Math.max(0, s.comboCount - 3) * 25);
+        s.popups.push(ScorePopup.chain(a.x, a.y - 28, bonus));
+        audioManager.playChain();
+      }
+    }
+  };
+
+  const collectPowerUp = (p, W, H) => {
+    const s = stateRef.current;
+    const def = POWERUP_TYPES[p.type];
+    s.particles.push(...Particle.burst(p.x, p.y, 14, def.color, true));
+
+    if (p.type === 'LIFE') {
+      if (s.lives < POWERUP.MAX_LIVES) {
+        s.lives++;
+        onLivesUpdate(s.lives);
+        s.popups.push(ScorePopup.powerUp(p.x, p.y - 24, def.label, def.color));
+      } else {
+        const bonus = addScore(POWERUP.FULL_LIVES_BONUS);
+        s.popups.push(ScorePopup.powerUp(p.x, p.y - 24, `MAX +${bonus}`, def.color));
+      }
+      audioManager.playPowerUp('LIFE');
+    } else if (p.type === 'NOVA') {
+      s.popups.push(ScorePopup.powerUp(p.x, p.y - 24, def.label, def.color));
+      s.novaWaves.push(new NovaWave(s.ship.x, s.ship.y, Math.hypot(W, H)));
+      s.asteroids.forEach(a => {
+        s.particles.push(...Particle.burst(a.x, a.y, 8, a.color, a.size > 30));
+        destroyAsteroid(a, { combo: false });
+      });
+      s.asteroids = [];
+      shake(14, 24);
+      audioManager.playNova();
+    } else {
+      s.effects[p.type] = POWERUP.DURATION[p.type];
+      s.popups.push(ScorePopup.powerUp(p.x, p.y - 24, def.label, def.color));
+      audioManager.playPowerUp(p.type);
+    }
+    onScoreUpdate(s.score);
+  };
+
+  // Tells the HUD which timed effects are running. Only fires when the
+  // (coarsely quantised) state changes, so React isn't re-rendered each frame.
+  const reportEffects = (force = false) => {
+    const s = stateRef.current;
+    if (!onPowerUpsUpdate) return;
+    const active = Object.entries(s.effects)
+      .filter(([, t]) => t > 0)
+      .map(([type, t]) => ({ type, remaining: t / POWERUP.DURATION[type] }));
+    const key = active.map(e => `${e.type}:${Math.ceil(e.remaining * 20)}`).join('|');
+    if (force || key !== s.effectsKey) {
+      s.effectsKey = key;
+      onPowerUpsUpdate(active);
+    }
   };
 
   useEffect(() => {
@@ -64,6 +155,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
     }
 
     initState();
+    reportEffects(true);
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
@@ -107,12 +199,25 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       }
       if (s.waveAnnounceTimer > 0) s.waveAnnounceTimer -= dt;
 
+      // Power-up effect timers
+      for (const k in s.effects) {
+        if (s.effects[k] > 0) s.effects[k] = Math.max(0, s.effects[k] - dt);
+      }
+      reportEffects();
+      // Slow-mo scales asteroid time only — the ship stays at full speed
+      const rockDt = s.effects.SLOW > 0 ? dt * POWERUP.SLOW_FACTOR : dt;
+
       // Shoot
       if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
-        const bData = s.ship.shoot();
+        const spread = s.effects.SPREAD > 0;
+        const offsets = spread ? [-POWERUP.SPREAD_ANGLE, 0, POWERUP.SPREAD_ANGLE] : [0];
+        const cooldown = s.effects.RAPID > 0 ? POWERUP.RAPID_COOLDOWN : undefined;
+        const shots = s.ship.shoot(offsets, cooldown);
         audioManager.playShoot();
-        s.bullets.push(new Bullet(bData));
-        s.particles.push(...Particle.burst(bData.x, bData.y, 4, '#00e5ff', false));
+        shots.forEach(bData => {
+          s.bullets.push(new Bullet(bData));
+          s.particles.push(...Particle.burst(bData.x, bData.y, 4, '#00e5ff', false));
+        });
       }
       // Spawn asteroids
       s.spawnTimer -= dt;
@@ -125,7 +230,10 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       s.bullets = s.bullets.filter(b => { b.update(dt, W, H); return b.isAlive(W, H); });
 
       // Update asteroids
-      s.asteroids.forEach(a => a.update(dt, W, H));
+      s.asteroids.forEach(a => a.update(rockDt, W, H));
+
+      // Update power-up pickups
+      s.powerUps = s.powerUps.filter(p => { p.update(dt, W, H); return p.isAlive(); });
 
       // Bullet-asteroid collisions
       const surviving = [];
@@ -140,33 +248,9 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
             shake(a.size > 30 ? 4 : 2, 6);
             if (a.hp <= 0) {
               audioManager.playExplosion();
-
-              const pts  = a.scoreValue();
-              const big  = a.size > 30;
-              s.score   += pts;
-              s.kills++;
-
-              // Impact flash — brief white burst at kill point
-              s.flashes.push(ImpactFlash.fromAsteroid(a));
-
-              // Debris shards — line-segment spray
-              s.shards.push(
-                ...DebrisShard.burst(a.x, a.y, big ? 10 : 6, a.color, big)
-              );
-
-              // Floating score popup
-              s.popups.push(ScorePopup.fromKill(a.x, a.y, pts, a.size));
-
-              // Combo chain
-              s.comboCount++;
-              s.comboTimer = 120;
-              if (s.comboCount >= 3) {
-                const bonus = 50 + Math.max(0, s.comboCount - 3) * 25;
-                s.score += bonus;
-                s.popups.push(ScorePopup.chain(a.x, a.y - 28, bonus));
-                audioManager.playChain();
-              }
-
+              destroyAsteroid(a);
+              const drop = PowerUp.maybeDrop(a, s.powerUps.length);
+              if (drop) s.powerUps.push(drop);
               onScoreUpdate(s.score);
               surviving.push(...Asteroid.split(a));
               hit = true;
@@ -177,8 +261,29 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       });
       s.asteroids = surviving;
 
+      // Power-up pickups
+      s.powerUps = s.powerUps.filter(p => {
+        if (!p.touchesShip(s.ship)) return true;
+        collectPowerUp(p, W, H);
+        return false;
+      });
+
+      // Shield: asteroids that touch the bubble are smashed instead of hurting the ship
+      if (s.effects.SHIELD > 0) {
+        s.asteroids = s.asteroids.filter(a => {
+          if (Math.hypot(a.x - s.ship.x, a.y - s.ship.y) >= a.size + s.ship.radius + 12) return true;
+          audioManager.playShieldBlock();
+          audioManager.playExplosion();
+          s.particles.push(...Particle.burst(a.x, a.y, 12, POWERUP_TYPES.SHIELD.color, a.size > 30));
+          destroyAsteroid(a);
+          shake(4, 8);
+          onScoreUpdate(s.score);
+          return false;
+        });
+      }
+
       // Ship-asteroid collisions
-      if (!s.ship.isInvincible()) {
+      if (!s.ship.isInvincible() && s.effects.SHIELD <= 0) {
         for (let a of s.asteroids) {
           if (a.hitsShip(s.ship)) {
   audioManager.playPlayerHit();
@@ -202,6 +307,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       s.flashes   = s.flashes.filter(f => { f.update(dt); return f.isAlive(); });
       s.shards    = s.shards.filter(sh => { sh.update(dt); return sh.isAlive(); });
       s.popups    = s.popups.filter(p => { p.update(dt); return p.isAlive(); });
+      s.novaWaves = s.novaWaves.filter(n => { n.update(dt); return n.isAlive(); });
 
       // Screenshake decay
       if (s.shakeDur > 0) { s.shakeDur -= dt; if (s.shakeDur <= 0) s.shakeAmt *= 0.8; }
@@ -251,6 +357,9 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       // Asteroids
       s.asteroids.forEach(a => a.draw(ctx));
 
+      // Power-up pickups
+      s.powerUps.forEach(p => p.draw(ctx));
+
       // Bullets
       s.bullets.forEach(b => b.draw(ctx));
 
@@ -262,8 +371,26 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
 
       // Ship
       s.ship.draw(ctx, keysRef.current);
+      if (s.effects.SHIELD > 0) {
+        s.ship.drawShield(ctx, s.effects.SHIELD, POWERUP_TYPES.SHIELD.color);
+      }
+
+      // Nova shockwaves (on top of everything)
+      s.novaWaves.forEach(n => n.draw(ctx));
 
       ctx.restore();
+
+      // Slow-mo: blue tint + CRT scanlines while time is slowed
+      if (s.effects.SLOW > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.07;
+        ctx.fillStyle = POWERUP_TYPES.SLOW.color;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = '#000';
+        for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 2);
+        ctx.restore();
+      }
     }
 
     function loop(ts) {
