@@ -7,8 +7,6 @@ import { PowerUp } from './PowerUp';
 import { POWERUP_TYPES } from './powerUpGlyph';
 import { GAME, ASTEROID, POWERUP } from './constants';
 import audioManager from '../assets/audio/AudioManager';
-
-const VERSUS_ATTACK_COLOR = '#ff3b3b';
 // versusLinkRef — null in solo play. During a versus match its .current is
 // { sendAttack(n), attackQueueRef } so the loop can send and receive attacks.
 export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLivesUpdate, onWaveUpdate, onPowerUpsUpdate, versusLinkRef) {
@@ -251,15 +249,14 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
         s.spawnTimer = spawnInterval + (Math.random() - 0.5) * 10;
       }
 
-      // Versus: asteroids sent by the opponent arrive one at a time, in red
+      // Versus: asteroids sent by rivals arrive one at a time, in the sender's colour
       const link = versusLinkRef?.current;
-      if (link && link.attackQueueRef.current > 0) {
+      if (link && link.attackQueueRef.current.length > 0) {
         s.attackTimer -= dt;
         if (s.attackTimer <= 0) {
           const a = Asteroid.spawn(W, H, s.wave);
-          a.color = VERSUS_ATTACK_COLOR;
+          a.color = link.attackQueueRef.current.shift();
           s.asteroids.push(a);
-          link.attackQueueRef.current -= 1;
           s.attackTimer = 22;
         }
       }

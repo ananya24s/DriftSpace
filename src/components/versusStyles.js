@@ -43,8 +43,18 @@ export const st = {
   },
   copyHint: { fontSize: 9, letterSpacing: 2, color: 'rgba(255,255,255,0.35)' },
   hint: { fontSize: 9, letterSpacing: 2, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 1.6 },
-  matchup: { display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center' },
-  pilot: { fontFamily: FONT_PIXEL, fontSize: 12, letterSpacing: 2 },
+  slots: { display: 'flex', flexDirection: 'column', gap: 6, width: '100%' },
+  slot: {
+    display: 'flex', alignItems: 'center', gap: 10,
+    border: '1px solid', padding: '8px 12px', background: 'rgba(255,255,255,0.015)',
+  },
+  slotNum: { fontFamily: FONT_PIXEL, fontSize: 8 },
+  youTag: {
+    fontFamily: FONT_MONO, fontSize: 8, letterSpacing: 2, color: 'rgba(255,255,255,0.4)',
+    border: '1px solid rgba(255,255,255,0.15)', padding: '2px 5px',
+  },
+  openSlot: { fontFamily: FONT_MONO, fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.2)' },
+  pilot: { fontFamily: FONT_PIXEL, fontSize: 10, letterSpacing: 2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   vs: { fontFamily: FONT_PIXEL, fontSize: 9, color: 'rgba(255,255,255,0.4)' },
   countNum: { fontFamily: FONT_PIXEL, fontSize: 56, lineHeight: 1.2, margin: '8px 0' },
 };

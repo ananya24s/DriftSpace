@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import audioManager from '../assets/audio/AudioManager';
 import { st } from './versusStyles';
+import { MAX_PLAYERS, PLAYER_COLORS } from '../hooks/useVersus';
 
 const FONT_PIXEL = "'Press Start 2P', monospace";
 const CYAN       = '#00e5ff';
-const RED        = '#ff3b3b';
 const NAME_KEY   = 'driftspace-pilot-name';
 
 function loadName() {
@@ -53,6 +53,7 @@ export function VsButton({ children, onClick, primary, disabled, color = CYAN })
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.35 : 1,
         borderRadius: primary ? 2 : 0,
+        lineHeight: 1.8,
         boxShadow: primary && hov && !disabled ? `0 0 20px ${color}38` : 'none',
         transition: 'all 0.18s ease',
       }}
@@ -75,12 +76,34 @@ function Countdown({ count }) {
   );
 }
 
-function Matchup({ me, opp }) {
+/* Pilot list — filled slots in each pilot's colour, empty slots dimmed */
+export function PilotSlots({ pilots, myId, showEmpty }) {
+  const slots = showEmpty
+    ? Array.from({ length: MAX_PLAYERS }, (_, i) => pilots[i] ?? null)
+    : pilots;
   return (
-    <div style={st.matchup}>
-      <span style={{ ...st.pilot, color: CYAN }}>{me}</span>
-      <span style={st.vs}>VS</span>
-      <span style={{ ...st.pilot, color: RED }}>{opp}</span>
+    <div style={st.slots}>
+      {slots.map((p, i) => {
+        const color = p?.color ?? PLAYER_COLORS[i % PLAYER_COLORS.length];
+        return (
+          <div key={p?.id ?? `empty-${i}`} style={{
+            ...st.slot,
+            borderColor: p ? `${color}66` : 'rgba(255,255,255,0.08)',
+            borderStyle: p ? 'solid' : 'dashed',
+          }}>
+            <span style={{ ...st.slotNum, color: p ? color : 'rgba(255,255,255,0.2)' }}>P{i + 1}</span>
+            {p ? (
+              <>
+                <span style={{ ...st.pilot, color, textShadow: `0 0 8px ${color}88` }}>{p.name}</span>
+                {p.id === myId && <span style={st.youTag}>YOU</span>}
+                {p.role === 'host' && <span style={st.youTag}>HOST</span>}
+              </>
+            ) : (
+              <span style={st.openSlot}>OPEN SLOT</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -90,7 +113,7 @@ export function VersusLobby({ versus, onBack }) {
   const [name, setName]         = useState(loadName);
   const [codeInput, setCodeInput] = useState('');
   const [copied, setCopied]     = useState(false);
-  const { phase, code, role, opponent, error, count } = versus;
+  const { phase, code, role, members, players, myId, busy, error, count } = versus;
   const myName = name.trim() || 'PILOT';
 
   const click = () => audioManager.playClick();
@@ -120,31 +143,44 @@ export function VersusLobby({ versus, onBack }) {
   if (phase === 'countdown') {
     body = (
       <>
-        <Matchup me={myName} opp={opponent.name} />
+        <PilotSlots pilots={players} myId={myId} />
         <Countdown count={count} />
-        <div style={st.hint}>ASTEROIDS YOU CHAIN GET SENT TO YOUR RIVAL</div>
+        <div style={st.hint}>YOUR CHAINS SEND ASTEROIDS TO WHOEVER IS LEADING</div>
       </>
     );
-  } else if (phase === 'ready') {
+  } else if (phase === 'lobby') {
+    const canStart = members.length >= 2;
     body = (
       <>
-        <div style={{ ...st.status, color: '#39ff14' }}>PILOT CONNECTED</div>
-        <Matchup me={myName} opp={opponent.name} />
-        <div style={st.hint}>{role === 'host' ? 'LAUNCHING…' : 'WAITING FOR HOST TO LAUNCH…'}</div>
-      </>
-    );
-  } else if (phase === 'waiting') {
-    body = (
-      <>
-        <div style={st.label}>YOUR ROOM CODE</div>
+        <div style={st.label}>ROOM CODE</div>
         <button style={st.codeBox} onClick={copyCode} title="Copy code">
           {code}
         </button>
-        <div style={st.copyHint}>{copied ? '✦ COPIED ✦' : 'CLICK TO COPY · SEND IT TO A FRIEND'}</div>
-        <div style={{ ...st.status, animation: 'vs-blink 1s steps(1) infinite' }}>
-          WAITING FOR PILOT 2
-        </div>
-        <VsButton onClick={back}>CANCEL</VsButton>
+        <div style={st.copyHint}>{copied ? '✦ COPIED ✦' : 'CLICK TO COPY · SEND IT TO FRIENDS'}</div>
+
+        <div style={{ ...st.label, marginTop: 6 }}>PILOTS {members.length}/{MAX_PLAYERS}</div>
+        <PilotSlots
+          pilots={members.map((m, i) => ({ ...m, color: PLAYER_COLORS[i % PLAYER_COLORS.length] }))}
+          myId={myId}
+          showEmpty
+        />
+
+        {busy ? (
+          <div style={{ ...st.status, fontSize: 8, animation: 'vs-blink 1s steps(1) infinite' }}>
+            ROUND IN PROGRESS · YOU'RE IN THE NEXT ONE
+          </div>
+        ) : role === 'host' ? (
+          <div style={st.btnCol}>
+            <VsButton primary onClick={() => { click(); versus.start(); }} disabled={!canStart}>
+              {canStart ? `START (${members.length})` : 'NEED 2+ PILOTS'}
+            </VsButton>
+          </div>
+        ) : (
+          <div style={{ ...st.status, fontSize: 8, animation: 'vs-blink 1s steps(1) infinite' }}>
+            WAITING FOR HOST TO START
+          </div>
+        )}
+        <VsButton onClick={back}>LEAVE ROOM</VsButton>
       </>
     );
   } else if (phase === 'connecting') {
@@ -204,7 +240,7 @@ export function VersusLobby({ versus, onBack }) {
       <VsStyle />
       <div style={st.panel}>
         <div style={st.title}>VERSUS</div>
-        <div style={st.subtitle}>1 V 1 · LAST PILOT FLYING WINS</div>
+        <div style={st.subtitle}>2–4 PILOTS · LAST PILOT FLYING WINS</div>
         <div style={st.divider} />
         {body}
       </div>

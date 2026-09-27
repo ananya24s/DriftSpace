@@ -1,46 +1,72 @@
 import { useEffect } from 'react';
-import { VsStyle, VsButton } from './VersusLobby';
+import { VsStyle, VsButton, PilotSlots } from './VersusLobby';
 import { st } from './versusStyles';
 import audioManager from '../assets/audio/AudioManager';
 
 const FONT_PIXEL = "'Press Start 2P', monospace";
+const FONT_MONO  = "'JetBrains Mono', 'Courier New', monospace";
 const CYAN  = '#00e5ff';
 const RED   = '#ff3b3b';
 const GREEN = '#39ff14';
 
-const HEADLINE = {
-  win:  { text: 'YOU WIN',  color: GREEN },
-  lose: { text: 'YOU LOSE', color: RED },
-  draw: { text: 'DRAW',     color: CYAN },
-};
-
-function reasonText(result, oppName) {
-  switch (result.reason) {
-    case 'opponent-dead': return `${oppName} RAN OUT OF LIVES`;
-    case 'you-dead':      return 'YOU RAN OUT OF LIVES';
-    case 'disconnect':    return `${oppName} DISCONNECTED`;
-    case 'both-dead':     return 'BOTH SHIPS DOWN · DECIDED ON SCORE';
-    default:              return '';
-  }
+function ordinal(n) {
+  return ['1ST', '2ND', '3RD', '4TH'][n - 1] ?? `${n}TH`;
 }
 
-export function VersusResult({ versus, myName, onMenu }) {
-  const { result, opponent, rematch, phase, count } = versus;
-  const oppName = opponent.name || 'RIVAL';
+/* Standings table: place, pilot, score, status */
+function Standings({ rows, live }) {
+  return (
+    <div style={styles.table}>
+      {rows.map((p, i) => {
+        const place = live ? null : p.place;
+        const winner = !live && p.place === 1;
+        return (
+          <div key={p.id} style={{
+            ...styles.row,
+            borderColor: p.isMe ? `${CYAN}55` : 'rgba(255,255,255,0.06)',
+            background: winner ? `${p.color}12` : 'transparent',
+          }}>
+            <span style={{ ...styles.place, color: winner ? GREEN : 'rgba(255,255,255,0.4)' }}>
+              {live ? (p.alive ? '▲' : '✕') : ordinal(place ?? i + 1)}
+            </span>
+            <span style={{
+              ...styles.name, color: p.color,
+              textShadow: `0 0 8px ${p.color}77`,
+              opacity: live && !p.alive ? 0.45 : 1,
+            }}>
+              {p.name}
+            </span>
+            {p.isMe && <span style={st.youTag}>YOU</span>}
+            {!p.connected && <span style={styles.tag}>LEFT</span>}
+            <span style={styles.score}>{p.score.toLocaleString()}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function VersusResult({ versus, onMenu }) {
+  const { phase, result, players, members, myId, role, hostPresent, count } = versus;
+  const isHost = role === 'host';
 
   useEffect(() => {
     if (!result) return;
-    if (result.outcome === 'win') audioManager.playPowerUp('LIFE');
+    if (result.myPlace === 1) audioManager.playPowerUp('LIFE');
     else audioManager.playGameOver();
-  }, [result?.outcome]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [result?.myPlace]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const leave = () => { audioManager.playClick(); onMenu(); };
+
+  // Next round starting
   if (phase === 'countdown') {
     return (
       <div style={st.overlay}>
         <VsStyle />
         <div style={st.panel}>
-          <div style={st.title}>REMATCH</div>
+          <div style={st.title}>NEXT ROUND</div>
           <div style={st.divider} />
+          <PilotSlots pilots={players} myId={myId} />
           <div key={count} style={{
             ...st.countNum,
             color: count === 0 ? GREEN : '#fff',
@@ -53,46 +79,64 @@ export function VersusResult({ versus, myName, onMenu }) {
     );
   }
 
-  if (!result) return null;
-  const head = HEADLINE[result.outcome];
+  // We're out, others are still flying
+  if (phase === 'spectating') {
+    const me = players.find(p => p.isMe);
+    const flying = players.filter(p => p.alive).length;
+    const live = [...players].sort((a, b) => (a.alive === b.alive ? b.score - a.score : a.alive ? -1 : 1));
+    return (
+      <div style={st.overlay}>
+        <VsStyle />
+        <div style={st.panel}>
+          <div style={{ ...styles.headline, color: RED, textShadow: `0 0 26px ${RED}aa` }}>ELIMINATED</div>
+          <div style={st.hint}>
+            YOU FINISHED {ordinal(me?.rank ?? players.length)} · {flying} PILOT{flying === 1 ? '' : 'S'} STILL FLYING
+          </div>
+          <div style={st.divider} />
+          <div style={{ ...st.label, animation: 'vs-blink 1s steps(1) infinite' }}>● LIVE</div>
+          <Standings rows={live} live />
+          <div style={st.btnCol}>
+            <VsButton onClick={leave}>LEAVE ROOM</VsButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  let rematchLabel = 'REMATCH';
-  if (!opponent.connected) rematchLabel = 'RIVAL LEFT';
-  else if (rematch.me) rematchLabel = `WAITING FOR ${oppName}`;
+  if (!result) return null;
+
+  const won = result.myPlace === 1;
+  const oneVsOne = result.ranking.length === 2;
+  const headline = won ? 'YOU WIN' : oneVsOne ? 'YOU LOSE' : `${ordinal(result.myPlace)} PLACE`;
+  const color = won ? GREEN : oneVsOne ? RED : CYAN;
+  const champ = result.ranking[0];
+  const canPlayAgain = members.length >= 2;
 
   return (
     <div style={st.overlay}>
       <VsStyle />
       <div style={st.panel}>
-        <div style={{
-          fontFamily: FONT_PIXEL, fontSize: 30, letterSpacing: 4, color: head.color,
-          textShadow: `0 0 26px ${head.color}aa`, textAlign: 'center',
-        }}>
-          {head.text}
+        <div style={{ ...styles.headline, color, textShadow: `0 0 26px ${color}aa` }}>{headline}</div>
+        <div style={st.hint}>
+          {won ? 'LAST PILOT FLYING' : `${champ.name} WAS THE LAST PILOT FLYING`}
         </div>
-        <div style={st.hint}>{reasonText(result, oppName)}</div>
         <div style={st.divider} />
 
-        <div style={styles.scores}>
-          <ScoreCol name={myName} score={result.myScore} color={CYAN}
-            best={result.myScore >= result.oppScore} />
-          <div style={styles.vs}>VS</div>
-          <ScoreCol name={oppName} score={result.oppScore} color={RED}
-            best={result.oppScore >= result.myScore} />
-        </div>
-
-        {rematch.opp && !rematch.me && opponent.connected && (
-          <div style={{ ...st.status, fontSize: 8, color: GREEN, animation: 'vs-blink 0.8s steps(1) infinite' }}>
-            {oppName} WANTS A REMATCH
-          </div>
-        )}
+        <Standings rows={result.ranking} />
 
         <div style={st.btnCol}>
-          <VsButton primary onClick={() => { audioManager.playClick(); versus.requestRematch(); }}
-            disabled={!opponent.connected || rematch.me}>
-            {rematchLabel}
-          </VsButton>
-          <VsButton onClick={() => { audioManager.playClick(); onMenu(); }}>MENU</VsButton>
+          {isHost ? (
+            <VsButton primary onClick={() => { audioManager.playClick(); versus.start(); }} disabled={!canPlayAgain}>
+              {canPlayAgain ? `PLAY AGAIN (${members.length})` : 'EVERYONE LEFT'}
+            </VsButton>
+          ) : hostPresent ? (
+            <div style={{ ...st.status, fontSize: 8, animation: 'vs-blink 1s steps(1) infinite' }}>
+              WAITING FOR HOST TO START NEXT ROUND
+            </div>
+          ) : (
+            <div style={{ ...st.status, fontSize: 8, color: RED }}>HOST LEFT · NO MORE ROUNDS</div>
+          )}
+          <VsButton onClick={leave}>LEAVE ROOM</VsButton>
         </div>
         <div style={st.hint}>VERSUS SCORES DON&apos;T GO ON THE LEADERBOARD</div>
       </div>
@@ -100,21 +144,18 @@ export function VersusResult({ versus, myName, onMenu }) {
   );
 }
 
-function ScoreCol({ name, score, color, best }) {
-  return (
-    <div style={styles.col}>
-      <div style={{ fontFamily: FONT_PIXEL, fontSize: 9, color, letterSpacing: 1, textShadow: `0 0 8px ${color}88` }}>
-        {name}
-      </div>
-      <div style={{ fontFamily: FONT_PIXEL, fontSize: 16, color: best ? '#fff' : 'rgba(255,255,255,0.45)' }}>
-        {score.toLocaleString()}
-      </div>
-    </div>
-  );
-}
-
 const styles = {
-  scores: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, width: '100%' },
-  col: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
-  vs: { fontFamily: FONT_PIXEL, fontSize: 9, color: 'rgba(255,255,255,0.35)' },
+  headline: { fontFamily: FONT_PIXEL, fontSize: 26, letterSpacing: 4, textAlign: 'center', lineHeight: 1.3 },
+  table: { display: 'flex', flexDirection: 'column', gap: 6, width: '100%' },
+  row: {
+    display: 'flex', alignItems: 'center', gap: 10,
+    border: '1px solid', padding: '9px 12px',
+  },
+  place: { fontFamily: FONT_PIXEL, fontSize: 8, width: 30, flexShrink: 0 },
+  name: {
+    fontFamily: FONT_PIXEL, fontSize: 9, letterSpacing: 1, flex: 1, minWidth: 0,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  tag: { fontFamily: FONT_MONO, fontSize: 8, letterSpacing: 2, color: RED },
+  score: { fontFamily: FONT_PIXEL, fontSize: 10, color: '#fff' },
 };

@@ -3,32 +3,53 @@ import { connectRoom, makeRoomCode, normalizeRoomCode } from '../services/versus
 import audioManager from '../assets/audio/AudioManager';
 
 /*
-  Versus match state machine.
+  Versus match state machine — 2 to 4 pilots per room.
 
-  idle → connecting → waiting (host) ─┐
-                  └→ (guest finds host) → ready → countdown → playing → result
-                                                        ↑                 │
-                                                        └──── rematch ────┘
+  idle → connecting → lobby ──(host presses START)──→ countdown → playing
+                        ↑                                             │
+                        │                     (you run out of lives)  ├→ spectating ─┐
+                        │                                             │              │
+                        └──── late joiners wait here      (≤1 pilot left) → result ←─┘
+                                                                          │
+                                           host presses PLAY AGAIN ───────┘→ countdown
 
-  Each player runs their own normal game locally. Only small messages cross
-  the wire: live status (score/lives/wave), attacks, deaths and rematches.
+  Each pilot runs their own normal game locally. Only small messages cross
+  the wire: live status, attacks (aimed at the current leader), deaths.
+  The host only decides who is in a round and when it starts.
 */
+
+export const MAX_PLAYERS = 4;
+// Rival colours by roster slot. Cyan is left out on purpose: it's the colour
+// of your own ship and bullets.
+export const PLAYER_COLORS = ['#ff3b3b', '#ffd700', '#ff4dff', '#b4ff39'];
 
 const COUNTDOWN_FROM     = 3;
 const COUNTDOWN_STEP_MS  = 900;
-const HOST_START_DELAY   = 1200;
 const JOIN_TIMEOUT_MS    = 6000;
 const CONNECT_TIMEOUT_MS = 9000;
 const STATUS_INTERVAL_MS = 250;
-// Presence can miss a player whose connection dies without a clean close
-// (phone locked, Wi-Fi drop), so both sides also ping; silence = gone.
+const START_RESEND_MS    = 400;  // 'start' is sent twice in case one is lost
+// Presence can miss a pilot whose connection dies without a clean close
+// (phone locked, Wi-Fi drop), so everyone pings; silence mid-match = gone.
 const HEARTBEAT_MS       = 2000;
 const SILENCE_TIMEOUT_MS = 8000;
 
-const EMPTY_OPP = { name: '', score: 0, lives: 3, wave: 1, connected: false };
+const ACTIVE_PHASES = ['countdown', 'playing', 'spectating'];
 
-// callbacks.onMatchStart() — countdown hit GO, start a fresh game
-// callbacks.onMatchEnd()   — the match was decided, stop the game
+// Final standings: survivors first, then by the place each pilot claimed when
+// they went down, then score. Every client sorts the same data the same way.
+function rankPlayers(players) {
+  return [...players]
+    .sort((a, b) => {
+      if (a.alive !== b.alive) return a.alive ? -1 : 1;
+      if ((a.rank ?? 0) !== (b.rank ?? 0)) return (a.rank ?? 0) - (b.rank ?? 0);
+      return b.score - a.score;
+    })
+    .map((p, i) => ({ ...p, place: i + 1 }));
+}
+
+// callbacks.onMatchStart() — countdown hit GO: start a fresh game
+// callbacks.onGameOver()   — stop our game (we're out, or the match is decided)
 export function useVersus(callbacks = {}) {
   const callbacksRef = useRef(callbacks);
   useEffect(() => { callbacksRef.current = callbacks; });
@@ -37,36 +58,35 @@ export function useVersus(callbacks = {}) {
   const [code, setCode]         = useState('');
   const [role, setRole]         = useState(null);
   const [myName, setMyName]     = useState('');
-  const [opponent, setOpponent] = useState(EMPTY_OPP);
+  const [myId, setMyId]         = useState(null);
+  const [members, setMembers]   = useState([]);   // who's in the room (lobby list)
+  const [players, setPlayers]   = useState([]);   // pilots in the current match
+  const [busy, setBusy]         = useState(false); // joined mid-match, waiting
+  const [hostPresent, setHostPresent] = useState(false);
   const [error, setError]       = useState(null);
   const [count, setCount]       = useState(0);
   const [result, setResult]     = useState(null);
-  const [rematch, setRematch]   = useState({ me: false, opp: false });
-  const [incoming, setIncoming] = useState({ n: 0, tick: 0 });
+  const [incoming, setIncoming] = useState({ n: 0, tick: 0, name: '', color: '' });
 
   const phaseRef       = useRef('idle');
   const roleRef        = useRef(null);
-  const oppRef         = useRef(EMPTY_OPP);
-  const opponentIdRef  = useRef(null);
-  const rematchRef     = useRef({ me: false, opp: false });
+  const myIdRef        = useRef(null);
   const roomRef        = useRef(null);
-  const myScoreRef     = useRef(0);
+  const membersRef     = useRef([]);
+  const hostIdRef      = useRef(null);
+  const playersRef     = useRef({});      // id → player, current match
+  const rosterRef      = useRef([]);      // ids in the current match, slot order
+  const matchIdRef     = useRef(null);
+  const lastHeardRef   = useRef({});      // id → timestamp
+  const goneIdsRef     = useRef(new Set());
+  const busySentRef    = useRef(new Set());
   const myDeadRef      = useRef(false);
-  const attackQueueRef = useRef(0);   // read & drained by the game loop
+  const attackQueueRef = useRef([]);      // colours of incoming asteroids; drained by the game loop
   const timersRef      = useRef([]);
   const statusRef      = useRef({ last: 0, timer: null, latest: null });
-  const lastHeardRef   = useRef(0);
   const heartbeatRef   = useRef(null);
-  const goneIdsRef     = useRef(new Set()); // opponents we've declared gone
 
   const setPhase = useCallback(p => { phaseRef.current = p; setPhaseState(p); }, []);
-
-  const updateOpp = useCallback(patch => {
-    oppRef.current = { ...oppRef.current, ...patch };
-    setOpponent(oppRef.current);
-  }, []);
-
-  const setRematchBoth = useCallback(r => { rematchRef.current = r; setRematch(r); }, []);
 
   const later = useCallback((fn, ms) => {
     const t = setTimeout(fn, ms);
@@ -81,26 +101,71 @@ export function useVersus(callbacks = {}) {
     statusRef.current = { last: 0, timer: null, latest: null };
   }, []);
 
-  const finish = useCallback((outcome, reason) => {
-    setResult({ outcome, reason, myScore: myScoreRef.current, oppScore: oppRef.current.score });
-    setPhase('result');
-    callbacksRef.current.onMatchEnd?.();
-  }, [setPhase]);
+  const publishPlayers = useCallback(() => {
+    setPlayers(rosterRef.current.map(id => ({ ...playersRef.current[id] })));
+  }, []);
 
-  const startCountdown = useCallback(() => {
-    attackQueueRef.current = 0;
+  const aliveIds = useCallback(() => rosterRef.current.filter(id => playersRef.current[id]?.alive), []);
+
+  // ---- Match end ----
+
+  const checkMatchOver = useCallback(() => {
+    if (!ACTIVE_PHASES.includes(phaseRef.current)) return;
+    if (aliveIds().length > 1) return;
+
+    const ranking = rankPlayers(rosterRef.current.map(id => playersRef.current[id]));
+    const me = ranking.find(p => p.id === myIdRef.current);
+    const wasFlying = phaseRef.current !== 'spectating';
+    clearTimeout(statusRef.current.timer);
+    setResult({ ranking, myPlace: me?.place ?? ranking.length });
+    setPhase('result');
+    if (wasFlying) callbacksRef.current.onGameOver?.();
+  }, [aliveIds, setPhase]);
+
+  const eliminate = useCallback((id, rank) => {
+    const p = playersRef.current[id];
+    if (!p || !p.alive) return;
+    p.alive = false;
+    p.rank = rank ?? aliveIds().length + 1;
+    publishPlayers();
+    checkMatchOver();
+  }, [aliveIds, checkMatchOver, publishPlayers]);
+
+  // ---- Starting a round ----
+
+  const startMatch = useCallback((roster, matchId) => {
+    if (matchId === matchIdRef.current) return; // duplicate 'start'
+    if (!roster.some(r => r.id === myIdRef.current)) {
+      setBusy(true); // round started without us — we're in the next one
+      return;
+    }
+    matchIdRef.current = matchId;
+    clearTimers();
+
+    const now = Date.now();
+    playersRef.current = {};
+    rosterRef.current = roster.map(r => r.id);
+    roster.forEach((r, i) => {
+      playersRef.current[r.id] = {
+        id: r.id, name: r.name, color: PLAYER_COLORS[i % PLAYER_COLORS.length],
+        score: 0, lives: 3, wave: 1, alive: true, rank: null, connected: true,
+        isMe: r.id === myIdRef.current,
+      };
+      lastHeardRef.current[r.id] = now;
+    });
+    publishPlayers();
+    attackQueueRef.current = [];
     myDeadRef.current = false;
-    myScoreRef.current = 0;
-    setIncoming({ n: 0, tick: 0 });
+    setBusy(false);
     setResult(null);
-    setRematchBoth({ me: false, opp: false });
-    updateOpp({ score: 0, lives: 3, wave: 1 });
+    setIncoming({ n: 0, tick: 0, name: '', color: '' });
     setPhase('countdown');
 
     let n = COUNTDOWN_FROM;
     setCount(n);
     audioManager.playCountdown(false);
     const tick = () => {
+      if (phaseRef.current !== 'countdown') return; // match ended (everyone left)
       n -= 1;
       if (n > 0) {
         setCount(n);
@@ -114,133 +179,171 @@ export function useVersus(callbacks = {}) {
       }
     };
     later(tick, COUNTDOWN_STEP_MS);
-  }, [later, setPhase, setRematchBoth, updateOpp]);
+  }, [clearTimers, later, publishPlayers, setPhase]);
 
-  // Host kicks off a match; the guest starts when it hears 'start'
-  const hostStart = useCallback(() => {
+  // Host: start a round with everyone currently in the room (max 4)
+  const start = useCallback(() => {
     if (roleRef.current !== 'host' || !roomRef.current) return;
-    roomRef.current.send('start');
-    startCountdown();
-  }, [startCountdown]);
+    const roster = membersRef.current.slice(0, MAX_PLAYERS).map(m => ({ id: m.id, name: m.name }));
+    if (roster.length < 2) return;
+    const matchId = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    startMatch(roster, matchId); // (clears pending timers, so send after)
+    roomRef.current.send('start', { roster, matchId });
+    later(() => roomRef.current?.send('start', { roster, matchId }), START_RESEND_MS);
+  }, [later, startMatch]);
+
+  // ---- Leaving ----
 
   const resetAll = useCallback(() => {
     clearTimers();
     clearInterval(heartbeatRef.current);
     heartbeatRef.current = null;
-    goneIdsRef.current = new Set();
-    if (opponentIdRef.current) roomRef.current?.send('bye');
+    if (membersRef.current.length > 1) roomRef.current?.send('bye');
     roomRef.current?.leave();
     roomRef.current = null;
-    opponentIdRef.current = null;
     roleRef.current = null;
-    oppRef.current = EMPTY_OPP;
-    attackQueueRef.current = 0;
+    myIdRef.current = null;
+    membersRef.current = [];
+    hostIdRef.current = null;
+    playersRef.current = {};
+    rosterRef.current = [];
+    matchIdRef.current = null;
+    lastHeardRef.current = {};
+    goneIdsRef.current = new Set();
+    busySentRef.current = new Set();
+    attackQueueRef.current = [];
     myDeadRef.current = false;
-    setOpponent(EMPTY_OPP);
     setRole(null);
+    setMyId(null);
     setCode('');
+    setMembers([]);
+    setPlayers([]);
+    setBusy(false);
+    setHostPresent(false);
     setResult(null);
-    setRematchBoth({ me: false, opp: false });
     setPhase('idle');
-  }, [clearTimers, setPhase, setRematchBoth]);
+  }, [clearTimers, setPhase]);
 
   const fail = useCallback(message => {
     resetAll();
     setError(message);
   }, [resetAll]);
 
-  const handleOpponentGone = useCallback(() => {
-    if (!opponentIdRef.current) return;
-    goneIdsRef.current.add(opponentIdRef.current);
-    opponentIdRef.current = null;
-    updateOpp({ connected: false });
-    const phaseNow = phaseRef.current;
-    if (phaseNow === 'countdown' || phaseNow === 'playing') {
-      clearTimers();
-      finish('win', 'disconnect');
-    } else if (phaseNow === 'ready') {
-      if (roleRef.current === 'host') setPhase('waiting');
-      else fail('HOST LEFT THE ROOM');
+  const handleGone = useCallback(id => {
+    if (id === myIdRef.current || goneIdsRef.current.has(id)) return;
+    goneIdsRef.current.add(id);
+    delete lastHeardRef.current[id];
+
+    membersRef.current = membersRef.current.filter(m => m.id !== id);
+    setMembers(membersRef.current);
+
+    const p = playersRef.current[id];
+    if (p) {
+      p.connected = false;
+      if (ACTIVE_PHASES.includes(phaseRef.current)) eliminate(id);
+      else publishPlayers();
     }
-  }, [clearTimers, fail, finish, setPhase, updateOpp]);
+
+    if (id === hostIdRef.current) {
+      hostIdRef.current = null;
+      setHostPresent(false);
+      if (phaseRef.current === 'lobby' || phaseRef.current === 'connecting') fail('HOST LEFT THE ROOM');
+    }
+  }, [eliminate, fail, publishPlayers]);
+
+  // ---- Incoming messages ----
 
   const handleMessage = useCallback(msg => {
-    // Ignore anyone who isn't our paired opponent
-    if (!opponentIdRef.current || msg.from !== opponentIdRef.current) return;
-    lastHeardRef.current = Date.now();
-    const phaseNow = phaseRef.current;
+    const from = msg.from;
+    if (!from || goneIdsRef.current.has(from)) return;
+    lastHeardRef.current[from] = Date.now();
+    const p = playersRef.current[from];
+    const inMatch = ACTIVE_PHASES.includes(phaseRef.current);
 
     switch (msg.type) {
-      case 'ping':
-        break;
-      case 'bye':
-        handleOpponentGone();
-        break;
       case 'start':
-        if (roleRef.current === 'guest' && (phaseNow === 'ready' || phaseNow === 'result')) startCountdown();
+        if (from === hostIdRef.current) startMatch(msg.roster, msg.matchId);
+        break;
+      case 'busy':
+        if (msg.to === myIdRef.current && phaseRef.current === 'lobby') setBusy(true);
         break;
       case 'status':
-        updateOpp({ score: msg.score, lives: msg.lives, wave: msg.wave });
+      case 'ping':
+        if (p && inMatch && msg.matchId === matchIdRef.current) {
+          if (msg.score != null) { p.score = msg.score; p.lives = msg.lives; p.wave = msg.wave; }
+          publishPlayers();
+          // A lost 'dead' message gets corrected by the next ping
+          if (msg.alive === false) eliminate(from, msg.rank);
+        }
         break;
       case 'attack':
-        if (phaseNow === 'playing' && !myDeadRef.current) {
-          attackQueueRef.current += msg.count;
-          setIncoming(i => ({ n: msg.count, tick: i.tick + 1 }));
+        if (msg.to === myIdRef.current && phaseRef.current === 'playing' && !myDeadRef.current && p) {
+          for (let i = 0; i < msg.count; i++) attackQueueRef.current.push(p.color);
+          setIncoming(inc => ({ n: msg.count, tick: inc.tick + 1, name: p.name, color: p.color }));
         }
         break;
       case 'dead':
-        updateOpp({ score: msg.score, lives: 0 });
-        if (phaseNow === 'playing' && !myDeadRef.current) {
-          finish('win', 'opponent-dead');
-        } else if (myDeadRef.current) {
-          // Both died within network delay of each other — settle on score.
-          // Both sides compare the same two numbers, so they always agree.
-          const mine = myScoreRef.current;
-          const outcome = mine > msg.score ? 'win' : mine < msg.score ? 'lose' : 'draw';
-          setResult({ outcome, reason: 'both-dead', myScore: mine, oppScore: msg.score });
+        if (p && msg.matchId === matchIdRef.current) {
+          p.score = msg.score;
+          p.lives = 0;
+          eliminate(from, msg.rank);
         }
         break;
-      case 'rematch': {
-        const r = { ...rematchRef.current, opp: true };
-        setRematchBoth(r);
-        if (r.me && r.opp) hostStart();
+      case 'bye':
+        handleGone(from);
         break;
-      }
       default:
         break;
     }
-  }, [finish, handleOpponentGone, hostStart, setRematchBoth, startCountdown, updateOpp]);
+  }, [eliminate, handleGone, publishPlayers, startMatch]);
 
-  const handleMembers = useCallback((members, myId) => {
-    const myIndex = members.findIndex(m => m.id === myId);
-    if (myIndex >= 2) { fail('ROOM FULL'); return; }
+  // ---- Presence (who is in the room) ----
 
-    const other = members.slice(0, 2).find(m => m.id !== myId && !goneIdsRef.current.has(m.id));
-    const phaseNow = phaseRef.current;
+  const handleMembers = useCallback((list, meId) => {
+    const present = list.filter(m => !goneIdsRef.current.has(m.id));
+    // Only a newcomer decides the room is full — pilots already inside are
+    // never bumped (join times come from each device's clock, which can be off)
+    if (phaseRef.current === 'connecting' && present.length > MAX_PLAYERS) { fail('ROOM FULL'); return; }
 
-    if (other) {
-      if (other.role === roleRef.current) {
-        // Two hosts on one code (or two guests with no host) — not a valid pair
-        if (roleRef.current === 'host' && myIndex > 0) fail('CODE CLASH — HOST AGAIN');
-        return;
-      }
-      if (opponentIdRef.current === other.id) return;
-      opponentIdRef.current = other.id;
-      lastHeardRef.current = Date.now();
-      updateOpp({ name: other.name, connected: true });
-      if (phaseNow === 'waiting' || phaseNow === 'connecting') {
-        setPhase('ready');
-        audioManager.playPowerUp('SHIELD');
-        if (roleRef.current === 'host') {
-          later(() => { if (phaseRef.current === 'ready') hostStart(); }, HOST_START_DELAY);
-        }
-      }
+    const hosts = present.filter(m => m.role === 'host');
+    if (roleRef.current === 'host' && hosts[0] && hosts[0].id !== meId) {
+      fail('CODE CLASH — HOST AGAIN');
       return;
     }
 
-    // Opponent is gone
-    handleOpponentGone();
-  }, [fail, handleOpponentGone, hostStart, later, setPhase, updateOpp]);
+    // Anyone who dropped out of presence has left
+    const ids = new Set(present.map(m => m.id));
+    membersRef.current.forEach(m => { if (!ids.has(m.id)) handleGone(m.id); });
+
+    const now = Date.now();
+    present.forEach(m => { if (!(m.id in lastHeardRef.current)) lastHeardRef.current[m.id] = now; });
+
+    // Stable slots: pilots already listed keep their place, newcomers go after
+    const known = membersRef.current.map(m => present.find(p => p.id === m.id)).filter(Boolean);
+    const fresh = present.filter(p => !membersRef.current.some(m => m.id === p.id));
+    const room = [...known, ...fresh].slice(0, MAX_PLAYERS);
+    const joined = room.filter(m => !membersRef.current.some(x => x.id === m.id) && m.id !== meId);
+    membersRef.current = room;
+    setMembers(room);
+    hostIdRef.current = hosts[0]?.id ?? null;
+    setHostPresent(!!hosts[0]);
+
+    if (joined.length && phaseRef.current === 'lobby') audioManager.playPowerUp('SHIELD');
+
+    if (roleRef.current === 'guest' && phaseRef.current === 'connecting' && hosts[0]) setPhase('lobby');
+
+    // Host: pilots who arrive mid-match wait for the next round
+    if (roleRef.current === 'host' && phaseRef.current !== 'lobby') {
+      room.forEach(m => {
+        if (m.id !== meId && !rosterRef.current.includes(m.id) && !busySentRef.current.has(m.id)) {
+          busySentRef.current.add(m.id);
+          roomRef.current?.send('busy', { to: m.id });
+        }
+      });
+    }
+  }, [fail, handleGone, setPhase]);
+
+  // ---- Connecting ----
 
   const open = useCallback((roomCode, asRole, name) => {
     resetAll();
@@ -252,32 +355,50 @@ export function useVersus(callbacks = {}) {
     setPhase('connecting');
 
     let connected = false;
-    roomRef.current = connectRoom({
-      code: roomCode, name, role: asRole,
-      handlers: {
-        members: handleMembers,
-        message: handleMessage,
-        status: s => {
-          if (s === 'error') { fail("CAN'T REACH SERVER"); return; }
-          connected = true;
-          if (asRole === 'host' && phaseRef.current === 'connecting') setPhase('waiting');
+    try {
+      roomRef.current = connectRoom({
+        code: roomCode, name, role: asRole,
+        handlers: {
+          members: handleMembers,
+          message: handleMessage,
+          status: s => {
+            if (s === 'error') { fail("CAN'T REACH SERVER"); return; }
+            connected = true;
+            if (asRole === 'host' && phaseRef.current === 'connecting') setPhase('lobby');
+          },
         },
-      },
-    });
+      });
+    } catch {
+      fail("CAN'T REACH SERVER");
+      return;
+    }
+    myIdRef.current = roomRef.current.id;
+    setMyId(roomRef.current.id);
 
     later(() => { if (!connected) fail("CAN'T REACH SERVER"); }, CONNECT_TIMEOUT_MS);
-
-    heartbeatRef.current = setInterval(() => {
-      if (!opponentIdRef.current) return;
-      roomRef.current?.send('ping');
-      if (Date.now() - lastHeardRef.current > SILENCE_TIMEOUT_MS) handleOpponentGone();
-    }, HEARTBEAT_MS);
     if (asRole === 'guest') {
       later(() => {
         if (phaseRef.current === 'connecting') fail(connected ? 'ROOM NOT FOUND' : "CAN'T REACH SERVER");
       }, JOIN_TIMEOUT_MS);
     }
-  }, [fail, handleMembers, handleMessage, handleOpponentGone, later, resetAll, setPhase]);
+
+    heartbeatRef.current = setInterval(() => {
+      if (!roomRef.current || membersRef.current.length < 2) return;
+      const inMatch = ACTIVE_PHASES.includes(phaseRef.current) || phaseRef.current === 'result';
+      const me = playersRef.current[myIdRef.current];
+      roomRef.current.send('ping', inMatch && me
+        ? { matchId: matchIdRef.current, alive: me.alive, rank: me.rank, score: me.score, lives: me.lives, wave: me.wave }
+        : {});
+      // Mid-match, a silent pilot counts as gone (lobby relies on presence,
+      // so a friend who briefly switches apps isn't kicked)
+      if (ACTIVE_PHASES.includes(phaseRef.current)) {
+        const now = Date.now();
+        rosterRef.current.forEach(id => {
+          if (id !== myIdRef.current && now - (lastHeardRef.current[id] ?? now) > SILENCE_TIMEOUT_MS) handleGone(id);
+        });
+      }
+    }, HEARTBEAT_MS);
+  }, [fail, handleGone, handleMembers, handleMessage, later, resetAll, setPhase]);
 
   const host = useCallback(name => open(makeRoomCode(), 'host', name), [open]);
 
@@ -287,46 +408,53 @@ export function useVersus(callbacks = {}) {
     open(roomCode, 'guest', name);
   }, [open]);
 
+  const leave = useCallback(() => { resetAll(); setError(null); }, [resetAll]);
+
   // ---- Called by the game ----
 
   const sendStatus = useCallback(status => {
-    myScoreRef.current = status.score;
+    const me = playersRef.current[myIdRef.current];
+    if (me) { me.score = status.score; me.lives = status.lives; me.wave = status.wave; }
     const st = statusRef.current;
     st.latest = status;
     const flush = () => {
       st.timer = null;
       st.last = Date.now();
-      if (phaseRef.current === 'playing') roomRef.current?.send('status', st.latest);
+      if (phaseRef.current === 'playing') {
+        roomRef.current?.send('status', { ...st.latest, matchId: matchIdRef.current });
+      }
     };
     const wait = STATUS_INTERVAL_MS - (Date.now() - st.last);
     if (wait <= 0) flush();
     else if (!st.timer) st.timer = setTimeout(flush, wait);
   }, []);
 
+  // Attacks go to the rival currently in the lead (random among ties)
   const sendAttack = useCallback(n => {
-    if (phaseRef.current === 'playing' && !myDeadRef.current) roomRef.current?.send('attack', { count: n });
-  }, []);
+    if (phaseRef.current !== 'playing' || myDeadRef.current) return;
+    const rivals = aliveIds().filter(id => id !== myIdRef.current).map(id => playersRef.current[id]);
+    if (!rivals.length) return;
+    const top = Math.max(...rivals.map(r => r.score));
+    const leaders = rivals.filter(r => r.score === top);
+    const target = leaders[Math.floor(Math.random() * leaders.length)];
+    roomRef.current?.send('attack', { to: target.id, count: n });
+  }, [aliveIds]);
 
   const reportDeath = useCallback(score => {
+    if (myDeadRef.current || !['countdown', 'playing'].includes(phaseRef.current)) return;
     myDeadRef.current = true;
-    myScoreRef.current = score;
-    roomRef.current?.send('dead', { score });
-    if (phaseRef.current === 'playing') finish('lose', 'you-dead');
-  }, [finish]);
+    const me = playersRef.current[myIdRef.current];
+    if (me) { me.score = score; me.lives = 0; }
+    const rank = aliveIds().length; // e.g. 3 still flying including me → 3rd place
+    roomRef.current?.send('dead', { score, rank, matchId: matchIdRef.current });
+    if (phaseRef.current === 'playing' || phaseRef.current === 'countdown') setPhase('spectating');
+    eliminate(myIdRef.current, rank);
+    callbacksRef.current.onGameOver?.();
+  }, [aliveIds, eliminate, setPhase]);
 
-  const requestRematch = useCallback(() => {
-    if (!oppRef.current.connected || rematchRef.current.me) return;
-    const r = { ...rematchRef.current, me: true };
-    setRematchBoth(r);
-    roomRef.current?.send('rematch');
-    if (r.me && r.opp) hostStart();
-  }, [hostStart, setRematchBoth]);
-
-  const leave = useCallback(() => { resetAll(); setError(null); }, [resetAll]);
-
-  // Closing the tab: tell the rival right away instead of waiting for silence
+  // Closing the tab: tell the room right away instead of waiting for silence
   useEffect(() => {
-    const onHide = () => { if (opponentIdRef.current) roomRef.current?.send('bye'); };
+    const onHide = () => { if (membersRef.current.length > 1) roomRef.current?.send('bye'); };
     window.addEventListener('pagehide', onHide);
     return () => window.removeEventListener('pagehide', onHide);
   }, []);
@@ -338,9 +466,10 @@ export function useVersus(callbacks = {}) {
   }, [clearTimers]);
 
   return {
-    phase, code, role, myName, opponent, error, count, result, rematch, incoming,
+    phase, code, role, myName, myId, members, players, busy, hostPresent,
+    error, count, result, incoming,
     attackQueueRef,
-    host, join, leave, requestRematch,
+    host, join, leave, start,
     sendStatus, sendAttack, reportDeath,
     clearError: () => setError(null),
   };

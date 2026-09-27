@@ -49,8 +49,8 @@ export default function App() {
   useEffect(() => { modeRef.current = mode; }, [mode]);
   const versus = useVersus({
     onMatchStart: () => startGame(),
-    // Stop our game when the match is decided — whichever side it ended on
-    onMatchEnd: () => setGameState(g => (g === 'playing' || g === 'versus' ? 'versus-result' : g)),
+    // Stop our game when we're knocked out or the match is decided
+    onGameOver: () => setGameState(g => (g === 'playing' || g === 'versus' ? 'versus-result' : g)),
   });
   const versusLinkRef = useRef(null);
   useEffect(() => {
@@ -88,7 +88,7 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  // Versus: stream our live score/lives/wave to the opponent
+  // Versus: stream our live score/lives/wave to the room
   useEffect(() => {
     if (mode === 'versus' && gameState === 'playing') versus.sendStatus({ score, lives, wave });
   }, [mode, gameState, score, lives, wave]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -149,7 +149,7 @@ useEffect(() => {
       )}
 
       {mode === 'versus' && gameState === 'playing' && (
-        <VersusHUD opponent={versus.opponent} incoming={versus.incoming} />
+        <VersusHUD rivals={versus.players.filter(p => !p.isMe)} incoming={versus.incoming} />
       )}
 
       {(gameState === 'playing' || gameState === 'paused') && (
@@ -209,7 +209,7 @@ useEffect(() => {
       )}
 
       {gameState === 'versus-result' && (
-        <VersusResult versus={versus} myName={versus.myName} onMenu={exitVersus} />
+        <VersusResult versus={versus} onMenu={exitVersus} />
       )}
 
       {gameState === 'dead' && showSubmit && (
