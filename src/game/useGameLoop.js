@@ -4,8 +4,9 @@ import { Asteroid } from './Asteroid';
 import { Bullet } from './Bullet';
 import { Particle, DebrisShard, ImpactFlash, ScorePopup, NovaWave } from './Particle';
 import { PowerUp } from './PowerUp';
-import { POWERUP_TYPES } from './powerUpGlyph';
-import { GAME, ASTEROID, POWERUP } from './constants';
+import { Ufo } from './Ufo';
+import { POWERUP_TYPES, randomPowerUpType } from './powerUpGlyph';
+import { GAME, ASTEROID, POWERUP, UFO } from './constants';
 import audioManager from '../assets/audio/AudioManager';
 // versusLinkRef — null in solo play. During a versus match its .current is
 // { sendAttack(n), attackQueueRef } so the loop can send and receive attacks.
@@ -49,6 +50,10 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       novaWaves: [],
       effectsKey: '',
       attackTimer: 0,
+      ufos: [],
+      enemyBullets: [],
+      ufoTimer: UFO.SPAWN_INTERVAL * 0.6, // first saucer comes a bit sooner
+      ufoWarble: 0,
     };
   }, [canvasRef]);
 
@@ -96,6 +101,45 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
     }
   };
 
+  // The ship takes a hit: lose a life, brief invincibility, maybe game over
+  const hitShip = () => {
+    const s = stateRef.current;
+    audioManager.playPlayerHit();
+    s.lives--;
+    onLivesUpdate(s.lives);
+    shake(10, 20);
+    s.particles.push(...Particle.burst(s.ship.x, s.ship.y, 20, '#00e5ff', true));
+    s.ship.hit();
+    if (s.lives <= 0) {
+      s.dead = true;
+      setTimeout(() => onDeath(s.score), 400);
+    }
+  };
+
+  // UFO kill: big explosion, points, power-up drop, combo, versus attack
+  const destroyUfo = (u, { combo = true } = {}) => {
+    const s = stateRef.current;
+    const pts = addScore(u.cfg.points);
+    s.kills++;
+    s.flashes.push(new ImpactFlash(u.x, u.y, u.radius * 1.6));
+    s.particles.push(...Particle.burst(u.x, u.y, 18, '#e6e8ff', true));
+    s.particles.push(...Particle.burst(u.x, u.y, 10, '#ff3b3b', true));
+    s.shards.push(...DebrisShard.burst(u.x, u.y, 12, '#e6e8ff', true));
+    s.popups.push(ScorePopup.fromKill(u.x, u.y, pts, 40));
+    shake(8, 12);
+    audioManager.playUfoExplode();
+
+    if (s.powerUps.length < POWERUP.MAX_ON_SCREEN && Math.random() < u.cfg.dropChance) {
+      s.powerUps.push(new PowerUp(u.x, u.y, randomPowerUpType()));
+    }
+    versusLinkRef?.current?.sendAttack(UFO.VERSUS_ATTACK);
+
+    if (combo) {
+      s.comboCount++;
+      s.comboTimer = 120;
+    }
+  };
+
   const collectPowerUp = (p, W, H) => {
     const s = stateRef.current;
     const def = POWERUP_TYPES[p.type];
@@ -119,6 +163,9 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
         destroyAsteroid(a, { combo: false });
       });
       s.asteroids = [];
+      s.ufos.forEach(u => destroyUfo(u, { combo: false }));
+      s.ufos = [];
+      s.enemyBullets = [];
       shake(14, 24);
       audioManager.playNova();
       versusLinkRef?.current?.sendAttack(3);
@@ -267,6 +314,30 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       // Update asteroids
       s.asteroids.forEach(a => a.update(rockDt, W, H));
 
+      // UFOs: one at a time from UFO.FIRST_WAVE, sooner each wave
+      if (s.wave >= UFO.FIRST_WAVE && s.ufos.length === 0) {
+        s.ufoTimer -= dt;
+        if (s.ufoTimer <= 0) {
+          s.ufos.push(Ufo.spawn(W, H, s.wave));
+          const interval = Math.max(UFO.SPAWN_INTERVAL_MIN,
+            UFO.SPAWN_INTERVAL - (s.wave - UFO.FIRST_WAVE) * UFO.SPAWN_RAMP);
+          s.ufoTimer = interval * (0.8 + Math.random() * 0.4);
+        }
+      }
+      s.ufos = s.ufos.filter(u => {
+        const shot = u.update(rockDt, W, H, s.ship);
+        if (shot) { s.enemyBullets.push(shot); audioManager.playUfoShot(); }
+        return u.isAlive(W);
+      });
+      if (s.ufos.length) {
+        s.ufoWarble -= dt;
+        if (s.ufoWarble <= 0) {
+          audioManager.playUfoWarble(s.ufos[0].kind === 'SMALL');
+          s.ufoWarble = s.ufos[0].kind === 'SMALL' ? 20 : 28;
+        }
+      }
+      s.enemyBullets = s.enemyBullets.filter(b => { b.update(rockDt, W, H); return b.isAlive(); });
+
       // Update power-up pickups
       s.powerUps = s.powerUps.filter(p => { p.update(dt, W, H); return p.isAlive(); });
 
@@ -296,6 +367,24 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       });
       s.asteroids = surviving;
 
+      // Bullet-UFO collisions
+      s.ufos = s.ufos.filter(u => {
+        for (let i = 0; i < s.bullets.length; i++) {
+          const b = s.bullets[i];
+          if (!u.hitsPoint(b.x, b.y, 2)) continue;
+          s.bullets.splice(i, 1);
+          s.particles.push(...Particle.burst(b.x, b.y, 8, '#e6e8ff', false));
+          if (u.hit()) {
+            destroyUfo(u);
+            onScoreUpdate(s.score);
+            return false;
+          }
+          audioManager.playShieldBlock();
+          return true;
+        }
+        return true;
+      });
+
       // Power-up pickups
       s.powerUps = s.powerUps.filter(p => {
         if (!p.touchesShip(s.ship)) return true;
@@ -317,23 +406,38 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
         });
       }
 
-      // Ship-asteroid collisions
-      if (!s.ship.isInvincible() && s.effects.SHIELD <= 0) {
-        for (let a of s.asteroids) {
-          if (a.hitsShip(s.ship)) {
-  audioManager.playPlayerHit();
+      // Shield also eats UFO shots and smashes saucers that ram it
+      if (s.effects.SHIELD > 0) {
+        const reach = s.ship.radius + 12;
+        s.enemyBullets = s.enemyBullets.filter(b => {
+          if (Math.hypot(b.x - s.ship.x, b.y - s.ship.y) >= reach) return true;
+          audioManager.playShieldBlock();
+          s.particles.push(...Particle.burst(b.x, b.y, 6, POWERUP_TYPES.SHIELD.color, false));
+          return false;
+        });
+        s.ufos = s.ufos.filter(u => {
+          if (!u.hitsPoint(s.ship.x, s.ship.y, reach)) return true;
+          destroyUfo(u);
+          onScoreUpdate(s.score);
+          return false;
+        });
+      }
 
-  s.lives--;
-  onLivesUpdate(s.lives);
-            shake(10, 20);
-            s.particles.push(...Particle.burst(s.ship.x, s.ship.y, 20, '#00e5ff', true));
-            s.ship.hit();
-            if (s.lives <= 0) {
-              s.dead = true;
-              setTimeout(() => onDeath(s.score), 400);
-            }
-            break;
-          }
+      // Ship hit by an asteroid, a UFO shot, or a UFO itself
+      if (!s.ship.isInvincible() && s.effects.SHIELD <= 0) {
+        const rammedUfo = s.ufos.find(u => u.hitsPoint(s.ship.x, s.ship.y, s.ship.radius - 4));
+        const shotIdx = s.enemyBullets.findIndex(b => b.hitsShip(s.ship));
+        if (s.asteroids.some(a => a.hitsShip(s.ship))) {
+          hitShip();
+        } else if (shotIdx >= 0) {
+          s.enemyBullets.splice(shotIdx, 1);
+          hitShip();
+        } else if (rammedUfo) {
+          // Ramming a saucer costs a life but still takes it down
+          s.ufos = s.ufos.filter(u => u !== rammedUfo);
+          destroyUfo(rammedUfo, { combo: false });
+          onScoreUpdate(s.score);
+          hitShip();
         }
       }
 
@@ -392,11 +496,15 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       // Asteroids
       s.asteroids.forEach(a => a.draw(ctx));
 
+      // UFOs
+      s.ufos.forEach(u => u.draw(ctx));
+
       // Power-up pickups
       s.powerUps.forEach(p => p.draw(ctx));
 
       // Bullets
       s.bullets.forEach(b => b.draw(ctx));
+      s.enemyBullets.forEach(b => b.draw(ctx));
 
       // Debris shards (above asteroids, below ship)
       s.shards.forEach(sh => sh.draw(ctx));

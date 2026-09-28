@@ -382,6 +382,21 @@ _playSfx(name) {
     this._chipNotes([988, 1319], { step: 0.05, dur: 0.07, vol: 0.05 });
   }
 
+  // UFO: low two-tone warble while a saucer is on screen (called on a beat)
+  playUfoWarble(small) {
+    const base = small ? 330 : 196;
+    this._chipNotes([base, base * 1.19], { step: 0.09, dur: 0.1, vol: 0.025 });
+  }
+
+  playUfoShot() {
+    this._chipNotes([1175, 784], { step: 0.03, dur: 0.05, vol: 0.035 });
+  }
+
+  playUfoExplode() {
+    this._playSfx('explosion');
+    this._chipNotes([880, 659, 440, 330, 220], { step: 0.05, dur: 0.08, vol: 0.05 });
+  }
+
   playShieldBlock() {
     this._chipNotes([1568, 1047], { step: 0.04, dur: 0.06, vol: 0.05 });
   }

@@ -54,3 +54,22 @@ export const POWERUP = {
     SLOW: 360,
   },
 };
+
+export const UFO = {
+  FIRST_WAVE: 2,            // saucers start showing up from this wave
+  SPAWN_INTERVAL: 1500,     // frames between saucers at FIRST_WAVE (~25s)
+  SPAWN_INTERVAL_MIN: 600,  // never more often than this (~10s)
+  SPAWN_RAMP: 120,          // each wave brings them this many frames sooner
+  SMALL_FROM_WAVE: 4,       // small (sharpshooter) saucers from this wave
+  SMALL_CHANCE: 0.35,       // chance a saucer is small, once allowed
+  BULLET_LIFE: 110,         // frames an enemy shot lasts
+  VERSUS_ATTACK: 2,         // asteroids sent to the leader for a UFO kill
+  BIG: {
+    radius: 24, speed: 1.4, hp: 2, points: 200,
+    fireEvery: 100, bulletSpeed: 3.2, spread: 0.9, dropChance: 1,
+  },
+  SMALL: {
+    radius: 15, speed: 2.4, hp: 1, points: 500,
+    fireEvery: 70, bulletSpeed: 4.2, spread: 0.3, dropChance: 0.5,
+  },
+};

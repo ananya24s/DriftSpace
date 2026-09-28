@@ -43,6 +43,7 @@ The project was built with a strong emphasis on clean architecture, reusable ren
 - 💥 Combo chain bonus system
 - 🌊 Dynamic wave progression
 - ⚡ 7 collectible 8-bit power-ups
+- 👾 Enemy UFOs that shoot back
 - ❤️ Extra lives (up to 5)
 - ⚔️ Online Versus for 2–4 pilots with room codes
 - 📱 Fully playable on phones
@@ -84,6 +85,7 @@ Gameplay includes:
 - Dynamic difficulty scaling
 - Three lives to start, with extra lives up to five
 - Collectible power-ups
+- Enemy UFOs from wave 2
 - Combo chain bonuses
 - Floating score feedback
 - Impact flash effects
@@ -111,6 +113,21 @@ Shoot asteroids to shake power-ups loose, then fly into one to collect it. Each 
 Timed power-ups appear at the top of the screen with a block-by-block countdown bar. Collecting a power-up that's already active refreshes its timer, and several can run at once.
 
 New players can open the **Power-Ups** guide from the title screen to see what every pickup does.
+
+---
+
+## 👾 Enemy UFOs
+
+From wave 2, saucers fly across the screen and fire at you, in the spirit of classic Asteroids. They come one at a time, and more often as the waves climb.
+
+| | Saucer | Behaviour | Reward |
+|---|--------|-----------|--------|
+| 🛸 | **Big** | Slow, takes 2 hits, fires loose shots | **200** points + a guaranteed power-up |
+| 🛸 | **Small** (from wave 4) | Fast, aims at you, gets sharper in later waves | **500** points + 50% power-up chance |
+
+- A UFO shot, or ramming a saucer, costs a life.
+- The **Shield** blocks UFO shots and smashes saucers that touch it. A **Nova Bomb** wipes them out, and **Slow-Mo** slows them and their shots.
+- UFO kills count toward chain combos. In Versus, each one sends 2 asteroids to the leader.
 
 ---
 
@@ -245,6 +262,7 @@ src
 │   ├── Asteroid.js
 │   ├── Bullet.js
 │   ├── PowerUp.js            # Pickup entity (drop, drift, collect)
+│   ├── Ufo.js                # Enemy saucers & their shots
 │   ├── powerUpGlyph.js       # Power-up definitions & pixel bitmaps
 │   ├── Particle.js           # Particles, debris, flashes, popups, nova
 │   ├── shipGlyph.js
@@ -343,7 +361,6 @@ npm run build
 
 While the core experience is complete, planned gameplay expansions include:
 
-- 👾 Enemy spacecraft
 - 🛰 Additional asteroid behaviors
 - ⚔ Boss encounters
 - 🌌 New gameplay modes
