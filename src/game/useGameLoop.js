@@ -7,6 +7,7 @@ import { PowerUp } from './PowerUp';
 import { Ufo } from './Ufo';
 import { POWERUP_TYPES, randomPowerUpType } from './powerUpGlyph';
 import { GAME, ASTEROID, POWERUP, UFO } from './constants';
+import { worldScale, FX, createQualityMonitor, disableGlow } from './fx';
 import audioManager from '../assets/audio/AudioManager';
 // versusLinkRef — null in solo play. During a versus match its .current is
 // { sendAttack(n), attackQueueRef } so the loop can send and receive attacks.
@@ -23,8 +24,9 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
 
   const initState = useCallback(() => {
     const canvas = canvasRef.current;
+    const scale = worldScale(canvas.width, canvas.height);
     stateRef.current = {
-      ship: new Ship(canvas.width / 2, canvas.height / 2),
+      ship: new Ship(canvas.width / scale / 2, canvas.height / scale / 2),
       bullets: [],
       asteroids: [],
       particles: [],
@@ -50,6 +52,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       novaWaves: [],
       effectsKey: '',
       attackTimer: 0,
+      reportedWave: 0,
       ufos: [],
       enemyBullets: [],
       ufoTimer: UFO.SPAWN_INTERVAL * 0.6, // first saucer comes a bit sooner
@@ -217,7 +220,18 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
     }
 
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    // alpha:false — the playfield is always opaque, so the browser can skip
+    // blending the canvas with the page (cheaper, especially on phones)
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!FX.glow) disableGlow(ctx);
+    // Drop glow + extra particles once if this device can't hold ~50 fps
+    const checkQuality = createQualityMonitor(() => disableGlow(ctx));
+
+    // World size in world units (see fx.js): larger than the screen on phones
+    const worldSize = () => {
+      const k = worldScale(canvas.width, canvas.height);
+      return { k, W: canvas.width / k, H: canvas.height / k };
+    };
 
     if (prevGameState === 'paused') {
       // Resume: keep the run, and don't count paused time toward wave progression
@@ -225,9 +239,10 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       keysRef.current = {};
     } else {
       initState();
+      const { W: sw, H: sh } = worldSize();
       starsRef.current = Array.from({ length: 180 }, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
+        x: Math.random() * sw,
+        y: Math.random() * sh,
         s: Math.random() * 1.6 + 0.2,
         a: Math.random() * 0.6 + 0.2,
         sp: Math.random() * 0.3 + 0.05,
@@ -240,15 +255,17 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
     function update(dt) {
       const s = stateRef.current;
       if (s.dead) return;
-      const W = canvas.width;
-      const H = canvas.height;
-      if (W === 0 || H === 0) return;
+      const { W, H } = worldSize();
+      if (!W || !H) return;
       const keys = keysRef.current;
       const elapsed = (Date.now() - s.startTime) / 1000;
 
       s.wave = Math.floor(elapsed / GAME.WAVE_DURATION) + 1;
       const spawnInterval = Math.max(ASTEROID.SPAWN_INTERVAL_MIN, ASTEROID.SPAWN_INTERVAL_BASE - s.wave * 5);
-      onWaveUpdate(s.wave);
+      if (s.wave !== s.reportedWave) {
+        s.reportedWave = s.wave;
+        onWaveUpdate(s.wave);
+      }
 
       // Ship
       s.ship.update(keys, dt, W, H);
@@ -465,14 +482,12 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
 
     function draw() {
       const s = stateRef.current;
-      const W = canvas.width;
-      const H = canvas.height;
-
-      ctx.clearRect(0, 0, W, H);
+      const { k, W, H } = worldSize();
 
       const sx = s.shakeAmt > 0.5 ? (Math.random() - 0.5) * s.shakeAmt : 0;
       const sy = s.shakeAmt > 0.5 ? (Math.random() - 0.5) * s.shakeAmt : 0;
       ctx.save();
+      ctx.scale(k, k);          // world units → screen pixels
       ctx.translate(sx, sy);
 
       // BG
@@ -480,9 +495,9 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       ctx.fillRect(-10, -10, W + 20, H + 20);
 
       // Stars
+      ctx.fillStyle = '#fff';
       stars.forEach(st => {
         ctx.globalAlpha = st.a;
-        ctx.fillStyle = '#fff';
         ctx.fillRect(st.x, st.y, st.s, st.s);
       });
       ctx.globalAlpha = 1;
@@ -523,22 +538,25 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
 
       ctx.restore();
 
-      // Slow-mo: blue tint + CRT scanlines while time is slowed
+      // Slow-mo: blue tint + CRT scanlines while time is slowed (screen space)
       if (s.effects.SLOW > 0) {
+        const SW = canvas.width, SH = canvas.height;
         ctx.save();
         ctx.globalAlpha = 0.07;
         ctx.fillStyle = POWERUP_TYPES.SLOW.color;
-        ctx.fillRect(0, 0, W, H);
+        ctx.fillRect(0, 0, SW, SH);
         ctx.globalAlpha = 0.08;
         ctx.fillStyle = '#000';
-        for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 2);
+        for (let y = 0; y < SH; y += 4) ctx.fillRect(0, y, SW, 2);
         ctx.restore();
       }
     }
 
     function loop(ts) {
-      const dt = Math.min((ts - lastTimeRef.current) / 16.67, 3);
+      const frameMs = ts - lastTimeRef.current;
+      const dt = Math.min(frameMs / 16.67, 3);
       lastTimeRef.current = ts;
+      checkQuality(frameMs);
       update(dt);
       draw();
       rafRef.current = requestAnimationFrame(loop);

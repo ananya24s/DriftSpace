@@ -1,3 +1,5 @@
+import { fxCount } from './fx';
+
 export class Particle {
   constructor(x, y, color, big = false) {
     const ang = Math.random() * Math.PI * 2;
@@ -13,7 +15,7 @@ export class Particle {
   }
 
   static burst(x, y, n, color, big = false) {
-    return Array.from({ length: n }, () => new Particle(x, y, color, big));
+    return Array.from({ length: fxCount(n) }, () => new Particle(x, y, color, big));
   }
 
   static thrust(ship) {
@@ -74,7 +76,7 @@ export class DebrisShard {
   }
 
   static burst(x, y, n, color, big = false) {
-    return Array.from({ length: n }, () => new DebrisShard(x, y, color, big));
+    return Array.from({ length: fxCount(n) }, () => new DebrisShard(x, y, color, big));
   }
 
   update(dt) {
@@ -229,7 +231,9 @@ export class NovaWave {
     if (this.age < 6) {
       ctx.globalAlpha = 0.35 * (1 - this.age / 6);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-20, -20, ctx.canvas.width + 40, ctx.canvas.height + 40);
+      // Screen space, so it covers everything whatever the camera zoom
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     }
     ctx.shadowBlur = 0;
     ctx.restore();
