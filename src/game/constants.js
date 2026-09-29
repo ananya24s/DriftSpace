@@ -52,7 +52,10 @@ export const POWERUP = {
     SPREAD: 600,
     MULTI: 600,
     SLOW: 360,
+    MAGNET: 720,
   },
+  MAGNET_RADIUS: 420,     // pull range in world units
+  MAGNET_PULL: 7,         // max pull speed (reached right next to the ship)
 };
 
 export const UFO = {

@@ -42,7 +42,7 @@ The project was built with a strong emphasis on clean architecture, reusable ren
 - 🎯 Endless arcade gameplay
 - 💥 Combo chain bonus system
 - 🌊 Dynamic wave progression
-- ⚡ 7 collectible 8-bit power-ups
+- ⚡ 8 collectible 8-bit power-ups
 - 👾 Enemy UFOs that shoot back
 - ❤️ Extra lives (up to 5)
 - ⚔️ Online Versus for 2–4 pilots with room codes
@@ -109,6 +109,7 @@ Shoot asteroids to shake power-ups loose, then fly into one to collect it. Each 
 | ✖️ | **Score x2** | Every point, including chain bonuses, counts double for 10 seconds. |
 | 💥 | **Nova Bomb** | Wipes out every asteroid on screen at once. |
 | ⏳ | **Slow-Mo** | Asteroids crawl for 6 seconds while you move at full speed. |
+| 🧲 | **Magnet** | Pulls pickups toward you from across the screen for 12 seconds. |
 
 Timed power-ups appear at the top of the screen with a block-by-block countdown bar. Collecting a power-up that's already active refreshes its timer, and several can run at once.
 
@@ -128,6 +129,7 @@ From wave 2, saucers fly across the screen and fire at you, in the spirit of cla
 - A UFO shot, or ramming a saucer, costs a life.
 - The **Shield** blocks UFO shots and smashes saucers that touch it. A **Nova Bomb** wipes them out, and **Slow-Mo** slows them and their shots.
 - UFO kills count toward chain combos. In Versus, each one sends 2 asteroids to the leader.
+- Only the red shots and touching a saucer hurt you. The blinking lights are decoration.
 
 ---
 
@@ -263,6 +265,7 @@ src
 │   ├── Bullet.js
 │   ├── PowerUp.js            # Pickup entity (drop, drift, collect)
 │   ├── Ufo.js                # Enemy saucers & their shots
+│   ├── fx.js                 # Phone zoom & automatic performance mode
 │   ├── powerUpGlyph.js       # Power-up definitions & pixel bitmaps
 │   ├── Particle.js           # Particles, debris, flashes, popups, nova
 │   ├── shipGlyph.js

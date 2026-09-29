@@ -48,7 +48,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       waveAnnounceTimer: 0,
       powerUps: [],
       // Remaining frames for each timed effect (0 = inactive)
-      effects: { SHIELD: 0, RAPID: 0, SPREAD: 0, MULTI: 0, SLOW: 0 },
+      effects: { SHIELD: 0, RAPID: 0, SPREAD: 0, MULTI: 0, SLOW: 0, MAGNET: 0 },
       novaWaves: [],
       effectsKey: '',
       attackTimer: 0,
@@ -358,6 +358,19 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       // Update power-up pickups
       s.powerUps = s.powerUps.filter(p => { p.update(dt, W, H); return p.isAlive(); });
 
+      // Magnet: reel pickups in, faster the closer they get
+      if (s.effects.MAGNET > 0) {
+        s.powerUps.forEach(p => {
+          const dx = s.ship.x - p.x, dy = s.ship.y - p.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 1 || dist > POWERUP.MAGNET_RADIUS) return;
+          const speed = 1.5 + POWERUP.MAGNET_PULL * (1 - dist / POWERUP.MAGNET_RADIUS);
+          const step = Math.min(dist, speed * dt);
+          p.x += (dx / dist) * step;
+          p.y += (dy / dist) * step;
+        });
+      }
+
       // Bullet-asteroid collisions
       const surviving = [];
       s.asteroids.forEach(a => {
@@ -513,6 +526,33 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
 
       // UFOs
       s.ufos.forEach(u => u.draw(ctx));
+
+      // Magnet: dashed tractor beams to every pickup in range + a ring on the ship
+      if (s.effects.MAGNET > 0 && !(s.effects.MAGNET < 90 && Math.floor(s.effects.MAGNET / 5) % 2 === 0)) {
+        const col = POWERUP_TYPES.MAGNET.color;
+        ctx.save();
+        ctx.strokeStyle = col;
+        ctx.shadowColor = col;
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 6]);
+        ctx.lineDashOffset = -Math.floor(Date.now() / 60) % 10;   // beams march inward
+        ctx.globalAlpha = 0.45;
+        s.powerUps.forEach(p => {
+          if (Math.hypot(p.x - s.ship.x, p.y - s.ship.y) > POWERUP.MAGNET_RADIUS) return;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(s.ship.x, s.ship.y);
+          ctx.stroke();
+        });
+        ctx.globalAlpha = 0.7;
+        ctx.setLineDash([3, 5]);
+        ctx.lineDashOffset = Math.floor(Date.now() / 90) % 8;
+        ctx.beginPath();
+        ctx.arc(s.ship.x, s.ship.y, s.ship.radius + 22, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // Power-up pickups
       s.powerUps.forEach(p => p.draw(ctx));

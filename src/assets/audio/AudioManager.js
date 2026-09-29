@@ -343,6 +343,7 @@ _playSfx(name) {
       SPREAD: [659, 523, 784, 659, 988],
       MULTI:  [523, 784, 1047, 1568],
       SLOW:   [784, 659, 523, 392],          // descending — time slowing down
+      MAGNET: [440, 880, 554, 1109, 659, 1319], // zig-zag "reeling in"
     };
     const fast = type === 'RAPID';
     this._chipNotes(tunes[type] ?? tunes.SHIELD, fast ? { step: 0.045, dur: 0.06 } : undefined);

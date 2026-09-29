@@ -94,6 +94,7 @@ export function PowerUpGuide({ onClose }) {
         <div style={{ ...styles.footer, marginTop: 10, color: 'rgba(255,59,59,0.75)' }}>
           ⚠ From wave 2, enemy UFOs fly through and shoot back.
           Take them down for big points and a power-up.
+          Only their red shots and touching a saucer hurt you; the blinking lights are harmless.
         </div>
         <button style={styles.closeBtn} onClick={onClose}>GOT IT</button>
       </div>

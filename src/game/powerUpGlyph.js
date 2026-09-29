@@ -95,6 +95,19 @@ export const POWERUP_TYPES = {
       'XXXXXXX',
     ],
   },
+  MAGNET: {
+    label: 'MAGNET', short: 'MAGN', color: '#2dffd2', weight: 1.3, timed: true,
+    desc: 'Pulls pickups toward you from across the screen for 12 seconds.',
+    bitmap: [
+      'XX...XX',
+      'XX...XX',
+      'XX...XX',
+      'XX...XX',
+      'XXX.XXX',
+      '.XXXXX.',
+      '..XXX..',
+    ],
+  },
 };
 
 export function randomPowerUpType() {
