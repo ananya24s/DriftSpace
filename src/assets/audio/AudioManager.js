@@ -344,6 +344,9 @@ _playSfx(name) {
       MULTI:  [523, 784, 1047, 1568],
       SLOW:   [784, 659, 523, 392],          // descending — time slowing down
       MAGNET: [440, 880, 554, 1109, 659, 1319], // zig-zag "reeling in"
+      JAM:      [659, 622, 587, 554],       // sly chromatic slide down — you're the saboteur
+      BLACKOUT: [659, 622, 587, 554],
+      FREEZE:   [659, 622, 587, 554],
     };
     const fast = type === 'RAPID';
     this._chipNotes(tunes[type] ?? tunes.SHIELD, fast ? { step: 0.045, dur: 0.06 } : undefined);
@@ -396,6 +399,21 @@ _playSfx(name) {
   playUfoExplode() {
     this._playSfx('explosion');
     this._chipNotes([880, 659, 440, 330, 220], { step: 0.05, dur: 0.08, vol: 0.05 });
+  }
+
+  // Hit by a rival's sabotage: harsh buzzing drop
+  playSabotaged() {
+    this._chipNotes([311, 294, 277, 262, 247], { step: 0.05, dur: 0.07, type: 'sawtooth', vol: 0.05 });
+  }
+
+  // Versus race pickup appeared: quick bright fanfare
+  playRaceStart() {
+    this._chipNotes([784, 988, 1175, 1568], { step: 0.07, dur: 0.1, vol: 0.06 });
+  }
+
+  playRaceResult(won) {
+    if (won) this._chipNotes([1047, 1319, 1568, 2093], { step: 0.07, dur: 0.12, vol: 0.06 });
+    else this._chipNotes([523, 494, 440], { step: 0.09, dur: 0.12, vol: 0.05 });
   }
 
   playShieldBlock() {

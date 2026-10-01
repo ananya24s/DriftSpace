@@ -69,7 +69,7 @@ Features include:
 - Dynamic camera drift
 - Animated asteroid field
 - Real-time global pilot ticker
-- Built-in power-ups guide for new players
+- Built-in Pilot's Manual for new players
 - Shared gameplay renderer
 - Smooth warp transition into gameplay
 
@@ -113,7 +113,7 @@ Shoot asteroids to shake power-ups loose, then fly into one to collect it. Each 
 
 Timed power-ups appear at the top of the screen with a block-by-block countdown bar. Collecting a power-up that's already active refreshes its timer, and several can run at once.
 
-New players can open the **Power-Ups** guide from the title screen to see what every pickup does.
+New players can open the **Pilot's Manual** from the title screen (the **MANUAL** strip, bottom-right). It has four tabs: **Basics**, **Power-ups**, **Enemies** and **Versus**. In the Versus lobby, **RULES ?** opens it straight at the Versus tab.
 
 ---
 
@@ -151,6 +151,8 @@ Play live against 1–3 friends. Everyone flies their own ship in their own aste
 - The bottom of the screen shows every rival's name, score and lives.
 - A pilot who joins mid-round waits in the lobby and joins the next round.
 - A pilot who disconnects is counted as out, and the match carries on.
+- **Sabotage pickups (Versus only):** pickups with red warning brackets that hit the top rival. **JAM** reverses their controls for 4s, **BLACKOUT** darkens their screen except around their ship for 5s, and **FREEZE** stops their blaster for 4s. A Shield blocks sabotage aimed at you.
+- **Race pickups:** every 45–60 seconds a golden flag appears at the same spot on every screen. The first pilot to grab it wins +1 life (or +1,000 if full). The host acts as referee, so the fastest grab wins even with network lag.
 - **Quick emotes:** send **GLHF, GG, NICE!, LOL, OOPS** or **RIP** to the room. Use the buttons in the lobby and results, keys **1–6** mid-match, or the **SAY** button on phones. They pop up in the sender's colour.
 - Pause is off in Versus, since the match is live for everyone.
 - Versus scores never go on the global leaderboard.
@@ -240,7 +242,7 @@ src
 │
 ├── components
 │   ├── Menu.jsx              # Living title screen + pause screen
-│   ├── PowerUpGuide.jsx      # Title-screen power-ups strip & guide
+│   ├── PowerUpGuide.jsx      # MANUAL strip & the tabbed Pilot's Manual
 │   ├── GameCanvas.jsx        # Canvas host for the game loop
 │   ├── HUD.jsx               # Score, lives, wave, active power-ups
 │   ├── PixelIcon.jsx         # 8-bit power-up sprite (SVG)

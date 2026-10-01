@@ -3,7 +3,7 @@ import { Ship } from './Ship';
 import { Asteroid } from './Asteroid';
 import { Bullet } from './Bullet';
 import { Particle, DebrisShard, ImpactFlash, ScorePopup, NovaWave } from './Particle';
-import { PowerUp } from './PowerUp';
+import { PowerUp, RacePickup } from './PowerUp';
 import { Ufo } from './Ufo';
 import { POWERUP_TYPES, randomPowerUpType } from './powerUpGlyph';
 import { GAME, ASTEROID, POWERUP, UFO } from './constants';
@@ -48,7 +48,8 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       waveAnnounceTimer: 0,
       powerUps: [],
       // Remaining frames for each timed effect (0 = inactive)
-      effects: { SHIELD: 0, RAPID: 0, SPREAD: 0, MULTI: 0, SLOW: 0, MAGNET: 0 },
+      effects: { SHIELD: 0, RAPID: 0, SPREAD: 0, MULTI: 0, SLOW: 0, MAGNET: 0, JAM: 0, BLACKOUT: 0, FREEZE: 0 },
+      races: [],            // versus race pickups on screen
       novaWaves: [],
       effectsKey: '',
       attackTimer: 0,
@@ -133,7 +134,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
     audioManager.playUfoExplode();
 
     if (s.powerUps.length < POWERUP.MAX_ON_SCREEN && Math.random() < u.cfg.dropChance) {
-      s.powerUps.push(new PowerUp(u.x, u.y, randomPowerUpType()));
+      s.powerUps.push(new PowerUp(u.x, u.y, randomPowerUpType(!!versusLinkRef?.current)));
     }
     versusLinkRef?.current?.sendAttack(UFO.VERSUS_ATTACK);
 
@@ -172,6 +173,12 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       shake(14, 24);
       audioManager.playNova();
       versusLinkRef?.current?.sendAttack(3);
+    } else if (def.mean) {
+      // Versus sabotage: aimed at the rival in the lead
+      const hit = versusLinkRef?.current?.sendSabotage(p.type);
+      s.popups.push(ScorePopup.powerUp(p.x, p.y - 24,
+        hit ? `${def.label} → ${hit.name}` : `${def.label}: NO TARGET`, hit ? hit.color : def.color));
+      audioManager.playPowerUp(p.type);
     } else {
       s.effects[p.type] = POWERUP.DURATION[p.type];
       s.popups.push(ScorePopup.powerUp(p.x, p.y - 24, def.label, def.color));
@@ -201,11 +208,16 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       if (e.code === 'Space') e.preventDefault();
     };
     const onKeyUp = e => { keysRef.current[e.code] = false; };
+    // Switching windows while holding a key never sends its keyup, which
+    // would leave the ship turning/firing on its own — release everything
+    const onBlur = () => { keysRef.current = {}; };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
     };
   }, []);
 
@@ -268,7 +280,14 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       }
 
       // Ship
-      s.ship.update(keys, dt, W, H);
+      // JAM (versus sabotage): left/right and thrust/reverse are swapped
+      const steer = s.effects.JAM > 0 ? {
+        ...keys,
+        ArrowLeft: keys.ArrowRight || keys.KeyD, ArrowRight: keys.ArrowLeft || keys.KeyA,
+        ArrowUp: keys.ArrowDown || keys.KeyS, ArrowDown: keys.ArrowUp || keys.KeyW,
+        KeyA: false, KeyD: false, KeyW: false, KeyS: false,
+      } : keys;
+      s.ship.update(steer, dt, W, H);
       if (s.ship.thrusting && Math.random() < 0.4) {
         s.particles.push(Particle.thrust(s.ship));
       }
@@ -295,7 +314,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       const rockDt = s.effects.SLOW > 0 ? dt * POWERUP.SLOW_FACTOR : dt;
 
       // Shoot
-      if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot()) {
+      if ((keys['Space'] || keys['KeyZ']) && s.ship.canShoot() && s.effects.FREEZE <= 0) {
         const spread = s.effects.SPREAD > 0;
         const offsets = spread ? [-POWERUP.SPREAD_ANGLE, 0, POWERUP.SPREAD_ANGLE] : [0];
         const cooldown = s.effects.RAPID > 0 ? POWERUP.RAPID_COOLDOWN : undefined;
@@ -358,6 +377,56 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       // Update power-up pickups
       s.powerUps = s.powerUps.filter(p => { p.update(dt, W, H); return p.isAlive(); });
 
+      const vlink = versusLinkRef?.current;
+      if (vlink) {
+        // Incoming sabotage from a rival — a Shield blocks it
+        while (vlink.sabotageQueueRef.current.length) {
+          const item = vlink.sabotageQueueRef.current.shift();
+          const def = POWERUP_TYPES[item.kind];
+          const blocked = s.effects.SHIELD > 0;
+          if (blocked) {
+            audioManager.playShieldBlock();
+            s.popups.push(ScorePopup.powerUp(s.ship.x, s.ship.y - 40, `${def.label} BLOCKED`, POWERUP_TYPES.SHIELD.color));
+          } else {
+            s.effects[item.kind] = POWERUP.DURATION[item.kind];
+            audioManager.playSabotaged();
+            shake(6, 12);
+            s.particles.push(...Particle.burst(s.ship.x, s.ship.y, 14, def.color, true));
+          }
+          vlink.reportSabotage(item, blocked);
+        }
+
+        // Race pickups: place new ones at the shared relative spot
+        while (vlink.raceQueueRef.current.length) {
+          const r = vlink.raceQueueRef.current.shift();
+          s.races.push(new RacePickup(r.id, r.fx * W, r.fy * H));
+        }
+        // Remove any the referee has decided, touch-to-claim the rest
+        s.races = s.races.filter(r => {
+          r.update(dt);
+          if (vlink.raceResolvedRef.current.has(r.id)) return false;
+          if (!r.claimed && r.touchesShip(s.ship)) {
+            r.claimed = true;
+            s.particles.push(...Particle.burst(r.x, r.y, 16, '#ffd700', true));
+            vlink.claimRace(r.id);
+          }
+          return r.isAlive();
+        });
+        // Races we won: +1 life, or bonus points when already full
+        while (vlink.raceRewardRef.current.length) {
+          vlink.raceRewardRef.current.shift();
+          if (s.lives < POWERUP.MAX_LIVES) {
+            s.lives++;
+            onLivesUpdate(s.lives);
+            s.popups.push(ScorePopup.powerUp(s.ship.x, s.ship.y - 44, 'RACE WON · +1 LIFE', '#ffd700'));
+          } else {
+            const pts = addScore(POWERUP.RACE_POINTS);
+            s.popups.push(ScorePopup.powerUp(s.ship.x, s.ship.y - 44, `RACE WON · +${pts}`, '#ffd700'));
+            onScoreUpdate(s.score);
+          }
+        }
+      }
+
       // Magnet: reel pickups in, faster the closer they get
       if (s.effects.MAGNET > 0) {
         s.powerUps.forEach(p => {
@@ -385,7 +454,7 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
             if (a.hp <= 0) {
               audioManager.playExplosion();
               destroyAsteroid(a);
-              const drop = PowerUp.maybeDrop(a, s.powerUps.length);
+              const drop = PowerUp.maybeDrop(a, s.powerUps.length, !!versusLinkRef?.current);
               if (drop) s.powerUps.push(drop);
               onScoreUpdate(s.score);
               surviving.push(...Asteroid.split(a));
@@ -557,6 +626,9 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       // Power-up pickups
       s.powerUps.forEach(p => p.draw(ctx));
 
+      // Versus race pickups
+      s.races.forEach(r => r.draw(ctx));
+
       // Bullets
       s.bullets.forEach(b => b.draw(ctx));
       s.enemyBullets.forEach(b => b.draw(ctx));
@@ -577,6 +649,21 @@ export function useGameLoop(canvasRef, gameState, onDeath, onScoreUpdate, onLive
       s.novaWaves.forEach(n => n.draw(ctx));
 
       ctx.restore();
+
+      // BLACKOUT (versus sabotage): darkness everywhere except around the ship
+      if (s.effects.BLACKOUT > 0) {
+        const SW = canvas.width, SH = canvas.height;
+        const cx = s.ship.x * k, cy = s.ship.y * k;
+        const inner = 70 * k, outer = 150 * k;
+        const fade = Math.min(1, s.effects.BLACKOUT / 30);   // eases off in the last half-second
+        const g = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+        g.addColorStop(0, 'rgba(0,0,0,0)');
+        g.addColorStop(1, `rgba(0,0,0,${0.96 * fade})`);
+        ctx.save();
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, SW, SH);
+        ctx.restore();
+      }
 
       // Slow-mo: blue tint + CRT scanlines while time is slowed (screen space)
       if (s.effects.SLOW > 0) {

@@ -22,6 +22,11 @@ export const st = {
     fontFamily: FONT_PIXEL, fontSize: 22, letterSpacing: 6, color: '#eaf7fc',
     textShadow: '0 0 24px rgba(0,229,255,0.55)',
   },
+  rulesLink: {
+    background: 'transparent', border: '1px solid rgba(0,229,255,0.3)', borderRadius: 2,
+    color: 'rgba(0,229,255,0.8)', fontFamily: FONT_PIXEL, fontSize: 8, letterSpacing: 2,
+    padding: '6px 10px 5px', cursor: 'pointer',
+  },
   subtitle: { fontSize: 9, letterSpacing: 3, color: 'rgba(0,229,255,0.55)' },
   divider: { width: '100%', height: 1, background: 'rgba(0,229,255,0.15)', margin: '4px 0' },
   label: { fontSize: 9, letterSpacing: 4, color: 'rgba(0,229,255,0.5)', alignSelf: 'flex-start' },

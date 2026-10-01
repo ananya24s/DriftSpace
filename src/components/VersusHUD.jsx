@@ -1,3 +1,6 @@
+import { POWERUP_TYPES } from '../game/powerUpGlyph';
+import { POWERUP } from '../game/constants';
+
 const FONT_PIXEL  = "'Press Start 2P', monospace";
 const FONT_MONO   = "'JetBrains Mono', 'Courier New', monospace";
 const SHIP_POINTS = '10.00,1.00 19.00,19.00 10.00,16.23 1.00,19.00';
@@ -9,7 +12,42 @@ const IS_TOUCH = typeof window !== 'undefined'
 
 /* Rival status bar (bottom centre) + "INCOMING" warning when someone sends
    asteroids your way. Shown only during a versus match. */
-export function VersusHUD({ rivals, incoming }) {
+const GOLD = '#ffd700';
+
+function secs(frames) { return Math.round(frames / 60); }
+
+/* "⚠ JAMMED BY BLAZE — CONTROLS REVERSED · 4s" (or "BLOCKED" with a shield) */
+function SabotageBanner({ sab }) {
+  if (!sab.tick) return null;
+  const def = POWERUP_TYPES[sab.kind];
+  if (!def) return null;
+  const title = sab.blocked ? `SHIELD BLOCKED ${def.label}` : `⚠ ${def.label} FROM ${sab.name}`;
+  const sub = sab.blocked ? `${sab.name} TRIED TO ${def.label} YOU` : `${def.hitText} · ${secs(POWERUP.DURATION[sab.kind])}s`;
+  const color = sab.blocked ? POWERUP_TYPES.SHIELD.color : def.color;
+  return (
+    <div key={sab.tick} style={{ ...styles.banner, top: '36%', color, textShadow: `0 0 18px ${color}cc`, animation: 'vs-warn 2.4s steps(10) both' }}>
+      <div>{title}</div>
+      <div style={styles.warnFrom}>{sub}</div>
+    </div>
+  );
+}
+
+/* Race pickup: "RACE! FIRST TO GRAB WINS" → "BLAZE GOT IT!" / "YOU GOT IT!" */
+function RaceBanner({ race }) {
+  if (!race.tick) return null;
+  const spawn = race.type === 'spawn';
+  const color = spawn ? GOLD : (race.isMe ? GOLD : race.color);
+  const title = spawn ? '▶ RACE! ◀' : race.isMe ? 'YOU GOT IT!' : `${race.name} GOT IT!`;
+  const sub = spawn ? 'FIRST TO GRAB THE GOLD FLAG WINS' : race.isMe ? 'RACE WON' : 'TOO SLOW';
+  return (
+    <div key={race.tick} style={{ ...styles.banner, top: '64%', color, textShadow: `0 0 18px ${color}cc`, animation: 'vs-warn 2.2s steps(10) both' }}>
+      <div>{title}</div>
+      <div style={styles.warnFrom}>{sub}</div>
+    </div>
+  );
+}
+
+export function VersusHUD({ rivals, incoming, sabotaged = { tick: 0 }, raceEvent = { tick: 0 } }) {
   // Each new attack bumps incoming.tick; keying on it replays the warning,
   // whose animation ends fully transparent, so no timer/state is needed.
   return (
@@ -33,6 +71,9 @@ export function VersusHUD({ rivals, incoming }) {
           <div style={styles.warnFrom}>FROM {incoming.name}</div>
         </div>
       )}
+
+      <SabotageBanner sab={sabotaged} />
+      <RaceBanner race={raceEvent} />
 
       <div style={styles.bar}>
         {rivals.map(r => (
@@ -100,6 +141,11 @@ const styles = {
     position: 'absolute', left: '50%', top: '26%', zIndex: 5, pointerEvents: 'none',
     fontFamily: FONT_PIXEL, fontSize: 14, letterSpacing: 3, textAlign: 'center',
     animation: 'vs-warn 1.4s steps(8) both',
+  },
+  banner: {
+    position: 'absolute', left: '50%', zIndex: 5, pointerEvents: 'none',
+    fontFamily: FONT_PIXEL, fontSize: 'clamp(11px, 1.8vw, 14px)', letterSpacing: 3, textAlign: 'center',
+    whiteSpace: 'nowrap',
   },
   warnFrom: { fontFamily: FONT_MONO, fontSize: 10, letterSpacing: 3, marginTop: 8, opacity: 0.8 },
 };

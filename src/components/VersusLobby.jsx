@@ -3,6 +3,7 @@ import audioManager from '../assets/audio/AudioManager';
 import { st } from './versusStyles';
 import { MAX_PLAYERS, PLAYER_COLORS } from '../hooks/useVersus';
 import { EmoteBar } from './VersusEmotes';
+import { PowerUpGuide } from './PowerUpGuide';
 
 const FONT_PIXEL = "'Press Start 2P', monospace";
 const CYAN       = '#00e5ff';
@@ -128,6 +129,7 @@ export function VersusLobby({ versus, onBack }) {
   const [name, setName]         = useState(loadName);
   const [codeInput, setCodeInput] = useState('');
   const [copied, setCopied]     = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const { phase, code, role, members, players, myId, busy, hostPresent, error, count } = versus;
   const myName = name.trim() || 'PILOT';
 
@@ -141,7 +143,8 @@ export function VersusLobby({ versus, onBack }) {
   };
 
   useEffect(() => {
-    const onKey = e => { if (e.code === 'Escape' && phase !== 'countdown') back(); };
+    // (Esc closes the rules first, not the lobby)
+    const onKey = e => { if (e.code === 'Escape' && phase !== 'countdown' && !showRules) back(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
@@ -278,9 +281,11 @@ export function VersusLobby({ versus, onBack }) {
       <div className="ds-vs-panel" style={st.panel}>
         <div className="ds-vs-title" style={st.title}>VERSUS</div>
         <div className="ds-short-hide" style={st.subtitle}>2–4 PILOTS · LAST PILOT FLYING WINS</div>
+        <button style={st.rulesLink} onClick={() => { click(); setShowRules(true); }}>RULES ?</button>
         <div className="ds-vs-divider" style={st.divider} />
         {body}
       </div>
+      {showRules && <PowerUpGuide initialTab="versus" onClose={() => { click(); setShowRules(false); }} />}
     </div>
   );
 }

@@ -108,10 +108,71 @@ export const POWERUP_TYPES = {
       '..XXX..',
     ],
   },
+
+  // ---- Versus-only sabotage pickups ("mean": red warning frame) ----
+  // Collecting one hits the current leader; a Shield blocks it.
+  JAM: {
+    label: 'JAM', short: 'JAM', color: '#ff2e9a', weight: 1.3, timed: true, versusOnly: true, mean: true,
+    desc: "Reverses the leader's controls for 4 seconds.",
+    hitText: 'CONTROLS REVERSED',
+    bitmap: [
+      '..X....',
+      '.XXXXXX',
+      '..X....',
+      '.......',
+      '....X..',
+      'XXXXXX.',
+      '....X..',
+    ],
+  },
+  BLACKOUT: {
+    label: 'BLACKOUT', short: 'DARK', color: '#a66bff', weight: 1.3, timed: true, versusOnly: true, mean: true,
+    desc: "Blacks out the leader's screen except around their ship for 5 seconds.",
+    hitText: 'SCREEN BLACKED OUT',
+    bitmap: [
+      '..XXX..',
+      '.X...X.',
+      'X.XXX.X',
+      'X.XXX.X',
+      'X.XXX.X',
+      '.X...X.',
+      '..XXX..',
+    ],
+  },
+  FREEZE: {
+    label: 'FREEZE', short: 'FRZ', color: '#9ff3ff', weight: 1.3, timed: true, versusOnly: true, mean: true,
+    desc: "Freezes the leader's blaster for 4 seconds.",
+    hitText: 'BLASTER FROZEN',
+    bitmap: [
+      '...X...',
+      '.X.X.X.',
+      '..XXX..',
+      'XXX.XXX',
+      '..XXX..',
+      '.X.X.X.',
+      '...X...',
+    ],
+  },
 };
 
-export function randomPowerUpType() {
-  const entries = Object.entries(POWERUP_TYPES);
+// Versus race pickup (golden flag) — not a power-up, but drawn the same way
+export const RACE_PICKUP = {
+  label: 'RACE PICKUP', color: '#ffd700',
+  desc: 'Appears on every screen at once. First pilot to grab it wins +1 life (or +1,000 if full).',
+  bitmap: [
+    'X.X.X..',
+    '.X.X.X.',
+    'X.X.X..',
+    '.X.X.X.',
+    'X......',
+    'X......',
+    'X......',
+  ],
+};
+
+// includeVersus: allow the versus-only sabotage pickups (versus matches only)
+export function randomPowerUpType(includeVersus = false) {
+  const entries = Object.entries(POWERUP_TYPES).filter(([, t]) => includeVersus || !t.versusOnly);
   const total = entries.reduce((sum, [, t]) => sum + t.weight, 0);
   let r = Math.random() * total;
   for (const [key, t] of entries) {
@@ -126,7 +187,7 @@ export function randomPowerUpType() {
  * translated to the pickup's position.
  */
 export function drawPowerUpBitmap(ctx, type, pixel) {
-  const { bitmap, color } = POWERUP_TYPES[type];
+  const { bitmap, color } = typeof type === 'string' ? POWERUP_TYPES[type] : type;
   const n = bitmap.length;
   const off = -(n * pixel) / 2;
   ctx.fillStyle = color;

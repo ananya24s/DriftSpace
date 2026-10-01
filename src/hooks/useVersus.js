@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { connectRoom, makeRoomCode, normalizeRoomCode } from '../services/versus';
 import audioManager from '../assets/audio/AudioManager';
+import { POWERUP } from '../game/constants';
+import { POWERUP_TYPES } from '../game/powerUpGlyph';
 
 /*
   Versus match state machine — 2 to 4 pilots per room.
@@ -78,6 +80,8 @@ export function useVersus(callbacks = {}) {
   const [result, setResult]     = useState(null);
   const [incoming, setIncoming] = useState({ n: 0, tick: 0, name: '', color: '' });
   const [emotes, setEmotes]     = useState([]);   // recent emotes feed
+  const [sabotaged, setSabotaged] = useState({ tick: 0 }); // last sabotage aimed at us
+  const [raceEvent, setRaceEvent] = useState({ tick: 0 }); // race started / won
 
   const phaseRef       = useRef('idle');
   const roleRef        = useRef(null);
@@ -96,6 +100,13 @@ export function useVersus(callbacks = {}) {
   const busySentRef    = useRef(new Set());
   const myDeadRef      = useRef(false);
   const attackQueueRef = useRef([]);      // colours of incoming asteroids; drained by the game loop
+  // Sabotage & race pickups — shared with the game loop
+  const sabotageQueueRef = useRef([]);    // sabotage aimed at us, waiting to be applied
+  const raceQueueRef     = useRef([]);    // race pickups to place on our screen
+  const raceResolvedRef  = useRef(new Set()); // races already decided (remove from screen)
+  const raceRewardRef    = useRef([]);    // races we won; the loop hands out the prize
+  const raceWinnersRef   = useRef({});    // host only: race id → winner
+  const raceCountRef     = useRef(0);
   const timersRef      = useRef([]);
   const statusRef      = useRef({ last: 0, timer: null, latest: null });
   const heartbeatRef   = useRef(null);
@@ -181,6 +192,58 @@ export function useVersus(callbacks = {}) {
 
   // ---- Starting a round ----
 
+  // ---- Race pickups (host is the referee) ----
+
+  const handleRaceSpawn = useCallback(race => {
+    if (phaseRef.current !== 'playing' || myDeadRef.current) return;
+    raceQueueRef.current.push(race);
+    setRaceEvent(e => ({ type: 'spawn', tick: e.tick + 1 }));
+    audioManager.playRaceStart();
+  }, []);
+
+  const handleRaceWon = useCallback((id, winnerId) => {
+    if (raceResolvedRef.current.has(id)) return;
+    raceResolvedRef.current.add(id);
+    const w = playersRef.current[winnerId];
+    const isMe = winnerId === myIdRef.current;
+    if (isMe) raceRewardRef.current.push(id);
+    if (phaseRef.current === 'playing' || phaseRef.current === 'spectating') {
+      setRaceEvent(e => ({
+        type: 'won', tick: e.tick + 1, isMe,
+        name: w?.name ?? 'PILOT', color: w?.color ?? '#ffd700',
+      }));
+      audioManager.playRaceResult(isMe);
+    }
+  }, []);
+
+  // First claim to reach the host wins, whatever order screens saw it in
+  const judgeRace = useCallback((id, claimant) => {
+    if (roleRef.current !== 'host' || raceWinnersRef.current[id]) return;
+    if (!playersRef.current[claimant]?.alive) return;
+    raceWinnersRef.current[id] = claimant;
+    roomRef.current?.send('race-won', { id, winner: claimant, matchId: matchIdRef.current });
+    handleRaceWon(id, claimant);
+  }, [handleRaceWon]);
+
+  // Host: drop a race pickup every 45–60s while the match is on
+  const scheduleRaces = useCallback(() => {
+    const [lo, hi] = POWERUP.RACE_EVERY_MS;
+    const next = () => later(() => {
+      if (roleRef.current !== 'host' || !['playing', 'spectating'].includes(phaseRef.current)) return;
+      raceCountRef.current += 1;
+      const race = {
+        id: `${matchIdRef.current}-r${raceCountRef.current}`,
+        fx: 0.15 + Math.random() * 0.7,   // same relative spot on every screen
+        fy: 0.25 + Math.random() * 0.5,
+        matchId: matchIdRef.current,
+      };
+      roomRef.current?.send('race-spawn', race);
+      handleRaceSpawn(race);
+      next();
+    }, lo + Math.random() * (hi - lo));
+    next();
+  }, [handleRaceSpawn, later]);
+
   const startMatch = useCallback((roster, matchId) => {
     if (matchId === matchIdRef.current) return; // duplicate 'start'
     if (!roster.some(r => r.id === myIdRef.current)) {
@@ -203,10 +266,18 @@ export function useVersus(callbacks = {}) {
     });
     publishPlayers();
     attackQueueRef.current = [];
+    sabotageQueueRef.current = [];
+    raceQueueRef.current = [];
+    raceResolvedRef.current = new Set();
+    raceRewardRef.current = [];
+    raceWinnersRef.current = {};
+    raceCountRef.current = 0;
     myDeadRef.current = false;
     setBusy(false);
     setResult(null);
     setIncoming({ n: 0, tick: 0, name: '', color: '' });
+    setSabotaged({ tick: 0 });
+    setRaceEvent({ tick: 0 });
     setPhase('countdown');
 
     let n = COUNTDOWN_FROM;
@@ -224,10 +295,11 @@ export function useVersus(callbacks = {}) {
         audioManager.playCountdown(true);
         setPhase('playing');
         callbacksRef.current.onMatchStart?.();
+        if (roleRef.current === 'host') scheduleRaces();
       }
     };
     later(tick, COUNTDOWN_STEP_MS);
-  }, [clearTimers, later, publishPlayers, setPhase]);
+  }, [clearTimers, later, publishPlayers, scheduleRaces, setPhase]);
 
   // Host: start a round with everyone currently in the room (max 4)
   const start = useCallback(() => {
@@ -440,6 +512,23 @@ export function useVersus(callbacks = {}) {
           setIncoming(inc => ({ n: msg.count, tick: inc.tick + 1, name: p.name, color: p.color }));
         }
         break;
+      case 'sabotage':
+        if (msg.to === myIdRef.current && phaseRef.current === 'playing' && !myDeadRef.current
+            && p && POWERUP_TYPES[msg.kind]?.mean) {
+          sabotageQueueRef.current.push({ kind: msg.kind, name: p.name, color: p.color });
+        }
+        break;
+      case 'race-spawn':
+        if (from === hostIdRef.current && msg.matchId === matchIdRef.current) {
+          handleRaceSpawn({ id: msg.id, fx: Number(msg.fx) || 0.5, fy: Number(msg.fy) || 0.5 });
+        }
+        break;
+      case 'race-claim':
+        if (msg.matchId === matchIdRef.current) judgeRace(msg.id, from);
+        break;
+      case 'race-won':
+        if (from === hostIdRef.current && msg.matchId === matchIdRef.current) handleRaceWon(msg.id, msg.winner);
+        break;
       case 'dead':
         if (p && msg.matchId === matchIdRef.current) {
           p.score = msg.score;
@@ -457,7 +546,7 @@ export function useVersus(callbacks = {}) {
       default:
         break;
     }
-  }, [applyRoom, eliminate, fail, handleGone, mergeRoom, publishPlayers, pushEmote, startMatch]);
+  }, [applyRoom, eliminate, fail, handleGone, handleRaceSpawn, handleRaceWon, judgeRace, mergeRoom, publishPlayers, pushEmote, startMatch]);
 
   // Supabase presence: the source of truth for who has *left*
   const handleMembers = useCallback((list, meId) => {
@@ -583,15 +672,40 @@ export function useVersus(callbacks = {}) {
   }, []);
 
   // Attacks go to the rival currently in the lead (random among ties)
-  const sendAttack = useCallback(n => {
-    if (phaseRef.current !== 'playing' || myDeadRef.current) return;
+  // The rival currently in the lead (random among ties), or null
+  const pickLeader = useCallback(() => {
+    if (phaseRef.current !== 'playing' || myDeadRef.current) return null;
     const rivals = aliveIds().filter(id => id !== myIdRef.current).map(id => playersRef.current[id]);
-    if (!rivals.length) return;
+    if (!rivals.length) return null;
     const top = Math.max(...rivals.map(r => r.score));
     const leaders = rivals.filter(r => r.score === top);
-    const target = leaders[Math.floor(Math.random() * leaders.length)];
-    roomRef.current?.send('attack', { to: target.id, count: n });
+    return leaders[Math.floor(Math.random() * leaders.length)];
   }, [aliveIds]);
+
+  const sendAttack = useCallback(n => {
+    const target = pickLeader();
+    if (target) roomRef.current?.send('attack', { to: target.id, count: n });
+  }, [pickLeader]);
+
+  // Sabotage hits the leader. Returns who it hit (for the pickup popup), or null.
+  const sendSabotage = useCallback(kind => {
+    const target = pickLeader();
+    if (!target) return null;
+    roomRef.current?.send('sabotage', { to: target.id, kind });
+    return { name: target.name, color: target.color };
+  }, [pickLeader]);
+
+  // The game loop tells us how an incoming sabotage landed (for the banner)
+  const reportSabotage = useCallback((item, blocked) => {
+    setSabotaged(prev => ({ ...item, blocked, tick: prev.tick + 1 }));
+  }, []);
+
+  // We touched a race pickup — ask the referee (or judge it ourselves as host)
+  const claimRace = useCallback(id => {
+    if (phaseRef.current !== 'playing' || myDeadRef.current) return;
+    if (roleRef.current === 'host') judgeRace(id, myIdRef.current);
+    else roomRef.current?.send('race-claim', { id, matchId: matchIdRef.current });
+  }, [judgeRace]);
 
   const reportDeath = useCallback(score => {
     if (myDeadRef.current || !['countdown', 'playing'].includes(phaseRef.current)) return;
@@ -620,10 +734,10 @@ export function useVersus(callbacks = {}) {
 
   return {
     phase, code, role, myName, myId, members, players, busy, hostPresent,
-    error, count, result, incoming, emotes,
-    attackQueueRef,
+    error, count, result, incoming, emotes, sabotaged, raceEvent,
+    attackQueueRef, sabotageQueueRef, raceQueueRef, raceResolvedRef, raceRewardRef,
     host, join, leave, start, sendEmote,
-    sendStatus, sendAttack, reportDeath,
+    sendStatus, sendAttack, sendSabotage, reportSabotage, claimRace, reportDeath,
     clearError: () => setError(null),
   };
 }

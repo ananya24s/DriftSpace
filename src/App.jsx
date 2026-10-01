@@ -56,9 +56,20 @@ export default function App() {
   const versusLinkRef = useRef(null);
   useEffect(() => {
     versusLinkRef.current = mode === 'versus'
-      ? { sendAttack: versus.sendAttack, attackQueueRef: versus.attackQueueRef }
+      ? {
+          sendAttack: versus.sendAttack,
+          attackQueueRef: versus.attackQueueRef,
+          sendSabotage: versus.sendSabotage,
+          reportSabotage: versus.reportSabotage,
+          sabotageQueueRef: versus.sabotageQueueRef,
+          claimRace: versus.claimRace,
+          raceQueueRef: versus.raceQueueRef,
+          raceResolvedRef: versus.raceResolvedRef,
+          raceRewardRef: versus.raceRewardRef,
+        }
       : null;
-  }, [mode, versus.sendAttack, versus.attackQueueRef]);
+  }, [mode, versus.sendAttack, versus.attackQueueRef, versus.sendSabotage, versus.reportSabotage,
+      versus.sabotageQueueRef, versus.claimRace, versus.raceQueueRef, versus.raceResolvedRef, versus.raceRewardRef]);
 
   const handleDeath = useCallback((finalScore) => {
     if (modeRef.current === 'versus') {
@@ -166,7 +177,8 @@ useEffect(() => {
 
       {mode === 'versus' && gameState === 'playing' && (
         <>
-          <VersusHUD rivals={versus.players.filter(p => !p.isMe)} incoming={versus.incoming} />
+          <VersusHUD rivals={versus.players.filter(p => !p.isMe)} incoming={versus.incoming}
+            sabotaged={versus.sabotaged} raceEvent={versus.raceEvent} />
           <InGameEmotes onSend={versus.sendEmote} />
         </>
       )}
