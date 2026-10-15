@@ -1,5 +1,6 @@
+
 import { POWERUP_TYPES } from '../game/powerUpGlyph';
-import { POWERUP } from '../game/constants';
+import { POWERUP, GAME } from '../game/constants';
 
 const FONT_PIXEL  = "'Press Start 2P', monospace";
 const FONT_MONO   = "'JetBrains Mono', 'Courier New', monospace";
@@ -94,7 +95,7 @@ export function VersusHUD({ rivals, incoming, sabotaged = { tick: 0 }, raceEvent
               <span style={{ ...styles.out, color: r.color }}>×{r.lives}</span>
             ) : r.alive ? (
               <span style={styles.lives}>
-                {Array.from({ length: Math.max(3, r.lives) }, (_, i) => (
+                {Array.from({ length: Math.max(GAME.VERSUS_LIVES, r.lives) }, (_, i) => (
                   <svg key={i} width={8} height={8} viewBox="0 0 20 20" style={{ display: 'block' }}>
                     <polygon points={SHIP_POINTS} fill={r.color} fillOpacity={0.18}
                       stroke={r.color} strokeWidth={2.4} strokeLinejoin="round"
@@ -149,3 +150,154 @@ const styles = {
   },
   warnFrom: { fontFamily: FONT_MONO, fontSize: 10, letterSpacing: 3, marginTop: 8, opacity: 0.8 },
 };
+// import { POWERUP_TYPES } from '../game/powerUpGlyph';
+// import { POWERUP } from '../game/constants';
+
+// const FONT_PIXEL  = "'Press Start 2P', monospace";
+// const FONT_MONO   = "'JetBrains Mono', 'Courier New', monospace";
+// const SHIP_POINTS = '10.00,1.00 19.00,19.00 10.00,16.23 1.00,19.00';
+
+// // On phones the chips must fit between the joystick and the fire button,
+// // so they drop the ship icons for a compact "×3" lives count.
+// const IS_TOUCH = typeof window !== 'undefined'
+//   && window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
+
+// /* Rival status bar (bottom centre) + "INCOMING" warning when someone sends
+//    asteroids your way. Shown only during a versus match. */
+// const GOLD = '#ffd700';
+
+// function secs(frames) { return Math.round(frames / 60); }
+
+// /* "⚠ JAMMED BY BLAZE — CONTROLS REVERSED · 4s" (or "BLOCKED" with a shield) */
+// function SabotageBanner({ sab }) {
+//   if (!sab.tick) return null;
+//   const def = POWERUP_TYPES[sab.kind];
+//   if (!def) return null;
+//   const title = sab.blocked ? `SHIELD BLOCKED ${def.label}` : `⚠ ${def.label} FROM ${sab.name}`;
+//   const sub = sab.blocked ? `${sab.name} TRIED TO ${def.label} YOU` : `${def.hitText} · ${secs(POWERUP.DURATION[sab.kind])}s`;
+//   const color = sab.blocked ? POWERUP_TYPES.SHIELD.color : def.color;
+//   return (
+//     <div key={sab.tick} style={{ ...styles.banner, top: '36%', color, textShadow: `0 0 18px ${color}cc`, animation: 'vs-warn 2.4s steps(10) both' }}>
+//       <div>{title}</div>
+//       <div style={styles.warnFrom}>{sub}</div>
+//     </div>
+//   );
+// }
+
+// /* Race pickup: "RACE! FIRST TO GRAB WINS" → "BLAZE GOT IT!" / "YOU GOT IT!" */
+// function RaceBanner({ race }) {
+//   if (!race.tick) return null;
+//   const spawn = race.type === 'spawn';
+//   const color = spawn ? GOLD : (race.isMe ? GOLD : race.color);
+//   const title = spawn ? '▶ RACE! ◀' : race.isMe ? 'YOU GOT IT!' : `${race.name} GOT IT!`;
+//   const sub = spawn ? 'FIRST TO GRAB THE GOLD FLAG WINS' : race.isMe ? 'RACE WON' : 'TOO SLOW';
+//   return (
+//     <div key={race.tick} style={{ ...styles.banner, top: '64%', color, textShadow: `0 0 18px ${color}cc`, animation: 'vs-warn 2.2s steps(10) both' }}>
+//       <div>{title}</div>
+//       <div style={styles.warnFrom}>{sub}</div>
+//     </div>
+//   );
+// }
+
+// export function VersusHUD({ rivals, incoming, sabotaged = { tick: 0 }, raceEvent = { tick: 0 } }) {
+//   // Each new attack bumps incoming.tick; keying on it replays the warning,
+//   // whose animation ends fully transparent, so no timer/state is needed.
+//   return (
+//     <>
+//       <style>{`
+//         @keyframes vs-warn {
+//           0%   { opacity: 0; transform: translateX(-50%) scale(1.3); }
+//           15%  { opacity: 1; transform: translateX(-50%) scale(1); }
+//           100% { opacity: 0; transform: translateX(-50%) scale(1); }
+//         }
+//         @keyframes vs-warn-blink { 0%, 49% { visibility: visible; } 50%, 100% { visibility: hidden; } }
+//       `}</style>
+
+//       {incoming.tick > 0 && (
+//         <div key={incoming.tick} style={{
+//           ...styles.warn, color: incoming.color, textShadow: `0 0 18px ${incoming.color}cc`,
+//         }}>
+//           <div>
+//             <span style={styles.blink}>▲</span> INCOMING ×{incoming.n} <span style={styles.blink}>▲</span>
+//           </div>
+//           <div style={styles.warnFrom}>FROM {incoming.name}</div>
+//         </div>
+//       )}
+
+//       <SabotageBanner sab={sabotaged} />
+//       <RaceBanner race={raceEvent} />
+
+//       <div style={styles.bar}>
+//         {rivals.map(r => (
+//           <div key={r.id} style={{
+//             ...styles.chip,
+//             ...(IS_TOUCH ? styles.chipCompact : null),
+//             borderColor: `${r.color}${r.alive ? '66' : '22'}`,
+//             opacity: r.alive ? 1 : 0.45,
+//           }}>
+//             <span style={{
+//               ...styles.name, ...(IS_TOUCH ? styles.nameCompact : null), color: r.color, textShadow: r.alive ? `0 0 8px ${r.color}99` : 'none',
+//               textDecoration: r.alive ? 'none' : 'line-through',
+//             }}>
+//               {r.name || 'RIVAL'}
+//             </span>
+//             <span style={styles.score}>{r.score.toLocaleString()}</span>
+//             {r.alive && IS_TOUCH ? (
+//               <span style={{ ...styles.out, color: r.color }}>×{r.lives}</span>
+//             ) : r.alive ? (
+//               <span style={styles.lives}>
+//                 {Array.from({ length: Math.max(3, r.lives) }, (_, i) => (
+//                   <svg key={i} width={8} height={8} viewBox="0 0 20 20" style={{ display: 'block' }}>
+//                     <polygon points={SHIP_POINTS} fill={r.color} fillOpacity={0.18}
+//                       stroke={r.color} strokeWidth={2.4} strokeLinejoin="round"
+//                       opacity={i < r.lives ? 1 : 0.2} />
+//                   </svg>
+//                 ))}
+//               </span>
+//             ) : (
+//               <span style={styles.out}>{r.connected ? 'OUT' : 'LEFT'}</span>
+//             )}
+//           </div>
+//         ))}
+//       </div>
+//     </>
+//   );
+// }
+
+// const styles = {
+//   bar: {
+//     position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+//     bottom: 'max(env(safe-area-inset-bottom, 0px) + 14px, 18px)',
+//     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+//     flexWrap: 'wrap',
+//     // Phones: stay clear of the joystick (left) and fire button (right)
+//     maxWidth: IS_TOUCH ? 'calc(100vw - 290px)' : 'calc(100vw - 32px)',
+//     pointerEvents: 'none', zIndex: 4,
+//   },
+//   chip: {
+//     display: 'flex', alignItems: 'center', gap: 8,
+//     padding: '6px 10px', whiteSpace: 'nowrap',
+//     border: '1px solid', background: 'rgba(0,0,0,0.6)',
+//   },
+//   chipCompact: { gap: 6, padding: '5px 7px' },
+//   nameCompact: { fontSize: 7, maxWidth: 48 },
+//   name: {
+//     fontFamily: FONT_PIXEL, fontSize: 8, letterSpacing: 1,
+//     maxWidth: 84, overflow: 'hidden', textOverflow: 'ellipsis',
+//   },
+//   score: { fontFamily: FONT_PIXEL, fontSize: 9, color: '#fff' },
+//   lives: { display: 'flex', gap: 3 },
+//   out: { fontFamily: FONT_MONO, fontSize: 9, letterSpacing: 2, color: 'rgba(255,255,255,0.5)' },
+//   blink: { animation: 'vs-warn-blink 0.25s steps(1) infinite' },
+//   warn: {
+//     position: 'absolute', left: '50%', top: '26%', zIndex: 5, pointerEvents: 'none',
+//     fontFamily: FONT_PIXEL, fontSize: 14, letterSpacing: 3, textAlign: 'center',
+//     animation: 'vs-warn 1.4s steps(8) both',
+//   },
+//   banner: {
+//     position: 'absolute', left: '50%', zIndex: 5, pointerEvents: 'none',
+//     fontFamily: FONT_PIXEL, fontSize: 'clamp(11px, 1.8vw, 14px)', letterSpacing: 3, textAlign: 'center',
+//     whiteSpace: 'nowrap',
+//   },
+//   warnFrom: { fontFamily: FONT_MONO, fontSize: 10, letterSpacing: 3, marginTop: 8, opacity: 0.8 },
+// };
